@@ -32,4 +32,4 @@ gpo_cpassword_name: "Scranton-LocalAdmin-Deploy"
 gpo_cpassword_user: "svc-deploy"
 gpo_cpassword_value: "j1Uyj3Vx8TY9LtLZil2uAuZkFQA/4latT76ZwgdHdhw"
 
-adcs_ca_name: "Scranton-CA"
+# ADCS is handled by badsectorlabs.ludus_adcs role (ESC1-16 out of the box)

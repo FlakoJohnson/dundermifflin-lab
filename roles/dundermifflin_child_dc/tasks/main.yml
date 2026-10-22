@@ -150,32 +150,10 @@
     {% endfor %}
 
   failed_when: false
-- name: Install ADCS role
-  ansible.windows.win_feature:
-    name:
-      - AD-Certificate
-      - ADCS-Web-Enrollment
-    include_management_tools: true
-    state: present
 
-- name: Configure Enterprise Root CA
-  ansible.windows.win_shell: |
-    Install-AdcsCertificationAuthority -CAType EnterpriseRootCA `
-      -CACommonName "{{ adcs_ca_name }}" -KeyLength 2048 `
-      -HashAlgorithmName SHA256 `
-      -CryptoProviderName "RSA#Microsoft Software Key Storage Provider" `
-      -Force -ErrorAction SilentlyContinue
-    Install-AdcsWebEnrollment -Force -ErrorAction SilentlyContinue
+# ADCS is handled by badsectorlabs.ludus_adcs role (separate role in the config)
+# It installs ADCS, configures ESC1-16 vulnerable templates, and web enrollment
 
-  failed_when: false
-- name: Set ESC1 on User template
-  ansible.windows.win_shell: |
-    $configNC = ([ADSI]"LDAP://RootDSE").configurationNamingContext
-    $userTpl = [ADSI]"LDAP://CN=User,CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC"
-    $userTpl.Put("msPKI-Certificate-Name-Flag", 1)
-    $userTpl.SetInfo()
-
-  failed_when: false
 - name: Create GPO with cpassword
   ansible.windows.win_shell: |
     Import-Module GroupPolicy

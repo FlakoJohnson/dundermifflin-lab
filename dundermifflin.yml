@@ -60,6 +60,10 @@ ludus:
         depends_on:
           - vm_name: "{{ range_id }}-DM-DC01"
             role: dundermifflin_parent_dc
+      - name: badsectorlabs.ludus_adcs
+        depends_on:
+          - vm_name: "{{ range_id }}-SC-DC01"
+            role: dundermifflin_child_dc
 
   # ── Workstations ──
   - vm_name: "{{ range_id }}-SC-WS01"

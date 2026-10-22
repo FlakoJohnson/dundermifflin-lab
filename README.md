@@ -33,11 +33,12 @@ All VMs on VLAN 10 (`10.x.10.0/24`). Router at `.254`.
 git clone https://github.com/FlakoJohnson/dundermifflin-lab.git
 cd dundermifflin-lab
 
-# 1. Install the roles
+# 1. Install roles (custom + community ADCS)
 ludus ansible role add -d roles/dundermifflin_parent_dc
 ludus ansible role add -d roles/dundermifflin_child_dc
 ludus ansible role add -d roles/dundermifflin_member
 ludus ansible role add -d roles/dundermifflin_workstation
+ludus ansible role add badsectorlabs.ludus_adcs
 
 # 2. Set the config
 ludus range config set -f dundermifflin.yml
@@ -82,7 +83,7 @@ ludus range logs -f
 | AS-REP Roast | Credential | mscott (Password1), kmalone (Kevin1!) |
 | Kerberoast | Credential | svc-sql (SQLSvc2026!) — MSSQLSvc/DM-SQL01:1433 |
 | GPP cpassword | Credential | Two GPOs: Corporate-ServiceAccount-Deploy (svc-backup), Scranton-LocalAdmin-Deploy (svc-deploy) |
-| ADCS ESC1 | Privilege Escalation | User template with ENROLLEE_SUPPLIES_SUBJECT — any user can request a cert as any other user |
+| ADCS ESC1–16 | Privilege Escalation | Full Certified Pre-Owned attack surface via `badsectorlabs.ludus_adcs` — ESC1 through ESC16 templates |
 | ADCS ESC8 | Privilege Escalation | HTTP-based web enrollment on SC-DC01 — NTLM relay target |
 | Unconstrained Delegation | Privilege Escalation | DM-SQL01 — coerce + relay for TGT capture |
 | Excessive Privileges | Privilege Escalation | cbratton in Backup Operators + Server Operators + WriteDacl on Domain Admins |
@@ -117,7 +118,7 @@ The Kali VM comes pre-installed with: nmap, netexec, impacket-scripts, bloodhoun
 - **Child DC** (SC-DC01): Promoted by the `dundermifflin_child_dc` Ansible role using `Install-ADDSDomain -DomainType ChildDomain`
 - **SQL Server** (DM-SQL01): Domain-joined by Ludus natively, post-config by `dundermifflin_member` role
 - **Workstations**: Domain-joined to scranton by the `dundermifflin_workstation` role
-- **ADCS**: Enterprise Root CA installed by the child DC role
+- **ADCS**: Installed by [`badsectorlabs.ludus_adcs`](https://github.com/badsectorlabs/ludus_adcs) — ESC1 through ESC16 vulnerable templates out of the box
 
 ## Troubleshooting
 
