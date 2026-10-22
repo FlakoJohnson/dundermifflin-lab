@@ -10,7 +10,7 @@
 - name: Join scranton.dundermifflin.local domain
   microsoft.ad.membership:
     dns_domain_name: "{{ child_fqdn }}"
-    domain_admin_user: "dundermifflin.local\\domainadmin"
+    domain_admin_user: "{{ parent_domain }}\\{{ domain_admin_user }}"
     domain_admin_password: "{{ domain_admin_password }}"
     domain_ou_path: "OU=Workstations,OU=Scranton,{{ child_domain_dn }}"
     state: domain
