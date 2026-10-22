@@ -64,6 +64,15 @@ ludus:
         depends_on:
           - vm_name: "{{ range_id }}-SC-DC01"
             role: dundermifflin_child_dc
+    role_vars:
+      ludus_adcs_domain: "scranton"
+      ludus_adcs_dc: "{{ range_id }}-DM-DC01"
+      ludus_adcs_dc_ip: "10.{{ range_second_octet }}.10.10"
+      ludus_adcs_ca_host: "SC-DC01"
+      ludus_adcs_domain_username: "dundermifflin\\domainadmin"
+      ludus_adcs_domain_password: "password"
+      ludus_adcs_domain_fqdn: "scranton.dundermifflin.local"
+      ludus_adcs_ca_common_name: "scranton-CA"
 
   # ── Workstations ──
   - vm_name: "{{ range_id }}-SC-WS01"
