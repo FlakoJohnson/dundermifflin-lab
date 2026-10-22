@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: d0s
+  description: "Dunder Mifflin AD Lab - dundermifflin_workstation"
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Windows
+      versions: [all]
+dependencies: []
