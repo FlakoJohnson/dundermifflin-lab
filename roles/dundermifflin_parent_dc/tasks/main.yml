@@ -115,3 +115,13 @@
     }
 
   failed_when: false
+
+- name: Simulate DA logon to SQL server (leaves cached creds in LSASS)
+  ansible.windows.win_shell: |
+    $pw = ConvertTo-SecureString "{{ (corporate_users | selectattr('sam', 'equalto', 'dwallace') | first).password }}" -AsPlainText -Force
+    $cred = New-Object PSCredential("{{ parent_domain }}\dwallace", $pw)
+    Invoke-Command -ComputerName {{ sql_computer_name }}.{{ parent_domain }} -Credential $cred -ScriptBlock {
+      whoami | Out-File C:\Users\Public\last_logon.txt
+      Get-Date | Add-Content C:\Users\Public\last_logon.txt
+    } -ErrorAction SilentlyContinue
+  failed_when: false
