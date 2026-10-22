@@ -29,6 +29,10 @@ All VMs on VLAN 10 (`10.x.10.0/24`). Router at `.254`.
 ## Quick Start
 
 ```bash
+# 0. Clone the repo
+git clone https://github.com/FlakoJohnson/dundermifflin-lab.git
+cd dundermifflin-lab
+
 # 1. Install the roles
 ludus ansible role add -d roles/dundermifflin_parent_dc
 ludus ansible role add -d roles/dundermifflin_child_dc
@@ -99,8 +103,8 @@ ludus range logs -f
 | Account | Password | Scope |
 |---------|----------|-------|
 | localuser | password | All VMs (Ludus default) |
-| domainadmin | password | Both domains (Ludus default) |
-| Administrator | password | Both domains (Ludus default) |
+| domainadmin | password | dundermifflin.local (Ludus default) |
+| Administrator | password | dundermifflin.local (Ludus default) |
 | kali | kali | Kali VM |
 
 ## Kali Tools
@@ -120,3 +124,5 @@ The Kali VM comes pre-installed with: nmap, netexec, impacket-scripts, bloodhoun
 - **Server 2022 template**: Do NOT use — Edge Appx blocks sysprep, causing SID duplication. Use `win2019-server-x64-template` instead.
 - **Debian 11 router**: Stale apt repos. The config overrides to `debian-12-x64-server-template`.
 - **WinRM timeouts**: The R610 (or similar constrained hardware) may struggle with 6 VMs sysprepping simultaneously. Ludus handles retries; a resume deploy usually completes what the first pass missed.
+- **ADCS on child DC**: Requires Enterprise Admins membership. The `dundermifflin_child_dc` role adds `localuser` to Enterprise Admins on the parent DC before installing ADCS. If ADCS fails with `ERROR_DS_RANGE_CONSTRAINT`, check Enterprise Admins membership.
+- **Workstation domain join**: Uses parent domain creds (`dundermifflin.local\domainadmin`) to join the child domain — the child domain doesn't have its own `domainadmin` account.
