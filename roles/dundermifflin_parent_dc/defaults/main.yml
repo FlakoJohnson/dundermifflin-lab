@@ -1,0 +1,43 @@
+---
+parent_domain: dundermifflin.local
+parent_domain_dn: "DC=dundermifflin,DC=local"
+safe_mode_password: "SafeMode2026!"
+domain_admin_password: "password"
+
+corporate_users:
+  - name: "David Wallace"
+    sam: dwallace
+    password: "Suck1tDevice!"
+    title: "CFO"
+    department: "Executive"
+    groups: ["Corporate-Executives", "Domain Admins"]
+  - name: "Jan Levinson"
+    sam: jlevinson
+    password: "Candles2026!"
+    title: "VP Sales"
+    department: "Executive"
+    groups: ["Corporate-Executives"]
+  - name: "Ryan Howard"
+    sam: rhoward
+    password: "WUPHF2026!"
+    title: "Temp"
+    department: "IT"
+    groups: ["Corporate-IT"]
+
+service_accounts:
+  - name: "svc-sql"
+    sam: svc-sql
+    password: "SQLSvc2026!"
+    spns:
+      - "MSSQLSvc/DM-SQL01.dundermifflin.local:1433"
+      - "MSSQLSvc/DM-SQL01.dundermifflin.local"
+
+corporate_groups:
+  - name: Corporate-Executives
+  - name: Corporate-IT
+
+gpo_cpassword_name: "Corporate-ServiceAccount-Deploy"
+gpo_cpassword_user: "svc-backup"
+gpo_cpassword_value: "edBSHOwhZLTjt/QS9FeIcJ83mjWA98gw9guKOhJOdcqh+ZGMeXOsQbCpZ3xUjTLfCuNH8pG5aSVYdYw/NglVmQ"
+
+sql_computer_name: "DM-SQL01"

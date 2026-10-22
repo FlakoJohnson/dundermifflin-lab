@@ -1,0 +1,120 @@
+router:
+  template: debian-12-x64-server-template
+
+defaults:
+  ad_domain_functional_level: WinThreshold
+  ad_forest_functional_level: WinThreshold
+  ad_domain_admin: domainadmin
+  ad_domain_admin_password: password
+  ad_domain_user: domainuser
+  ad_domain_user_password: password
+  ad_domain_safe_mode_password: SafeMode2026!
+
+ludus:
+  # ── Parent Domain: dundermifflin.local ──
+  - vm_name: "{{ range_id }}-DM-DC01"
+    hostname: "DM-DC01"
+    template: win2019-server-x64-template
+    vlan: 10
+    ip_last_octet: 10
+    ram_gb: 4
+    cpus: 2
+    windows:
+      sysprep: true
+    domain:
+      fqdn: dundermifflin.local
+      role: primary-dc
+    roles:
+      - dundermifflin_parent_dc
+
+  - vm_name: "{{ range_id }}-DM-SQL01"
+    hostname: "DM-SQL01"
+    template: win2019-server-x64-template
+    vlan: 10
+    ip_last_octet: 11
+    ram_gb: 4
+    cpus: 4
+    windows:
+      sysprep: true
+    domain:
+      fqdn: dundermifflin.local
+      role: member
+    roles:
+      - name: dundermifflin_member
+        depends_on:
+          - vm_name: "{{ range_id }}-DM-DC01"
+            role: dundermifflin_parent_dc
+
+  # ── Child Domain: scranton.dundermifflin.local ──
+  - vm_name: "{{ range_id }}-SC-DC01"
+    hostname: "SC-DC01"
+    template: win2019-server-x64-template
+    vlan: 10
+    ip_last_octet: 20
+    ram_gb: 4
+    cpus: 2
+    windows:
+      sysprep: true
+    roles:
+      - name: dundermifflin_child_dc
+        depends_on:
+          - vm_name: "{{ range_id }}-DM-DC01"
+            role: dundermifflin_parent_dc
+
+  # ── Workstations ──
+  - vm_name: "{{ range_id }}-SC-WS01"
+    hostname: "SC-WS01"
+    template: win11-22h2-x64-enterprise-template
+    vlan: 10
+    ip_last_octet: 31
+    ram_gb: 4
+    cpus: 2
+    windows:
+      sysprep: true
+    roles:
+      - name: dundermifflin_workstation
+        depends_on:
+          - vm_name: "{{ range_id }}-SC-DC01"
+            role: dundermifflin_child_dc
+
+  - vm_name: "{{ range_id }}-SC-WS02"
+    hostname: "SC-WS02"
+    template: win11-22h2-x64-enterprise-template
+    vlan: 10
+    ip_last_octet: 32
+    ram_gb: 4
+    cpus: 2
+    windows:
+      sysprep: true
+    roles:
+      - name: dundermifflin_workstation
+        depends_on:
+          - vm_name: "{{ range_id }}-SC-DC01"
+            role: dundermifflin_child_dc
+
+  # ── Attacker ──
+  - vm_name: "{{ range_id }}-SC-KALI"
+    hostname: "SC-KALI"
+    template: kali-x64-desktop-template
+    vlan: 10
+    ip_last_octet: 99
+    ram_gb: 4
+    cpus: 2
+    linux:
+      packages:
+        - nmap
+        - netexec
+        - impacket-scripts
+        - bloodhound
+        - certipy-ad
+        - responder
+        - evil-winrm
+        - smbclient
+        - ldap-utils
+        - john
+        - hashcat
+        - chisel
+        - crackmapexec
+    testing:
+      snapshot: false
+      block_internet: false

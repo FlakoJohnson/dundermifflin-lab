@@ -1,0 +1,199 @@
+---
+# dundermifflin_child_dc — promotes SC-DC01 as child domain DC, then configures everything
+
+- name: Set DNS to parent DC
+  ansible.windows.win_dns_client:
+    adapter_names: "*"
+    dns_servers:
+      - "{{ parent_dc_ip }}"
+
+- name: Install AD DS role
+  ansible.windows.win_feature:
+    name: AD-Domain-Services
+    include_management_tools: true
+    state: present
+  register: adds_install
+
+- name: Promote as child domain DC
+  ansible.windows.win_shell: |
+    $pw = ConvertTo-SecureString "{{ domain_admin_password }}" -AsPlainText -Force
+    $safePw = ConvertTo-SecureString "{{ safe_mode_password }}" -AsPlainText -Force
+    $cred = New-Object PSCredential("{{ parent_domain }}\domainadmin", $pw)
+    Install-ADDSDomain -NewDomainName "{{ child_domain }}" `
+      -ParentDomainName "{{ parent_domain }}" `
+      -DomainType ChildDomain `
+      -InstallDns:$true `
+      -CreateDnsDelegation:$true `
+      -Credential $cred `
+      -SafeModeAdministratorPassword $safePw `
+      -DomainMode WinThreshold `
+      -NoRebootOnCompletion:$false `
+      -Force:$true `
+      -ErrorAction Stop
+  register: child_dc_promo
+  ignore_errors: true
+
+- name: Wait for reboot after promotion
+  ansible.builtin.wait_for_connection:
+    timeout: 600
+    delay: 60
+  when: child_dc_promo is changed
+
+- name: Wait for AD DS to be operational
+  ansible.windows.win_shell: |
+    $timeout = 300; $start = Get-Date
+    while ((Get-Date) - $start -lt [TimeSpan]::FromSeconds($timeout)) {
+      try { Get-ADDomain -ErrorAction Stop | Out-Null; Write-Output "AD_READY"; exit 0 }
+      catch { Start-Sleep -Seconds 15 }
+    }
+    exit 1
+  register: ad_ready
+  changed_when: false
+  retries: 5
+  delay: 30
+  until: ad_ready.stdout is search("AD_READY")
+
+- name: Create Scranton OUs
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    @("OU=Scranton,{{ child_domain_dn }}",
+      "OU=Users,OU=Scranton,{{ child_domain_dn }}",
+      "OU=Groups,OU=Scranton,{{ child_domain_dn }}",
+      "OU=Workstations,OU=Scranton,{{ child_domain_dn }}"
+    ) | ForEach-Object {
+      $name = ($_ -split ",")[0] -replace "OU=",""
+      $path = ($_ -split ",",2)[1]
+      if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$_'" -ErrorAction SilentlyContinue)) {
+        New-ADOrganizationalUnit -Name $name -Path $path
+      }
+    }
+
+- name: Create Scranton groups
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for group in scranton_groups %}
+    New-ADGroup -Name "{{ group }}" -GroupScope Global -GroupCategory Security `
+      -Path "OU=Groups,OU=Scranton,{{ child_domain_dn }}" -ErrorAction SilentlyContinue
+    {% endfor %}
+
+- name: Create Scranton users
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    $pw = ConvertTo-SecureString "{{ item.password }}" -AsPlainText -Force
+    $names = "{{ item.name }}".Split(" ", 2)
+    $params = @{
+      Name = "{{ item.name }}"
+      SamAccountName = "{{ item.sam }}"
+      UserPrincipalName = "{{ item.sam }}@{{ child_fqdn }}"
+      GivenName = $names[0]
+      Surname = $names[1]
+      Title = "{{ item.title }}"
+      Department = "{{ item.dept }}"
+      Path = "OU=Users,OU=Scranton,{{ child_domain_dn }}"
+      AccountPassword = $pw
+      Enabled = $true
+    }
+    {% if item.description is defined %}
+    $params["Description"] = "{{ item.description }}"
+    {% endif %}
+    New-ADUser @params -ErrorAction SilentlyContinue
+  loop: "{{ scranton_users }}"
+
+- name: Add users to groups
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for user in scranton_users %}
+    {% for group in user.groups %}
+    Add-ADGroupMember -Identity "{{ group }}" -Members "{{ user.sam }}" -ErrorAction SilentlyContinue
+    {% endfor %}
+    {% endfor %}
+
+- name: Set AS-REP roastable accounts
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for user in scranton_users %}
+    {% if user.asrep is defined and user.asrep %}
+    $u = Get-ADUser "{{ user.sam }}" -Properties userAccountControl
+    Set-ADUser "{{ user.sam }}" -Replace @{userAccountControl = ($u.userAccountControl -bor 0x400000)}
+    {% endif %}
+    {% endfor %}
+
+- name: Add cbratton to privileged groups
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for user in scranton_users %}
+    {% if user.privileged_groups is defined %}
+    {% for group in user.privileged_groups %}
+    Add-ADGroupMember -Identity "{{ group }}" -Members "{{ user.sam }}" -ErrorAction SilentlyContinue
+    {% endfor %}
+    {% endif %}
+    {% endfor %}
+
+- name: Set WriteDacl on Domain Admins for cbratton
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for user in scranton_users %}
+    {% if user.writedacl_target is defined %}
+    $target = Get-ADGroup "{{ user.writedacl_target }}"
+    $attacker = Get-ADUser "{{ user.sam }}"
+    $acl = Get-Acl ("AD:" + $target.DistinguishedName)
+    $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($attacker.SID, "WriteDacl", "Allow")
+    $acl.AddAccessRule($ace)
+    Set-Acl ("AD:" + $target.DistinguishedName) $acl
+    {% endif %}
+    {% endfor %}
+
+- name: Install ADCS role
+  ansible.windows.win_feature:
+    name:
+      - AD-Certificate
+      - ADCS-Web-Enrollment
+    include_management_tools: true
+    state: present
+
+- name: Configure Enterprise Root CA
+  ansible.windows.win_shell: |
+    Install-AdcsCertificationAuthority -CAType EnterpriseRootCA `
+      -CACommonName "{{ adcs_ca_name }}" -KeyLength 2048 `
+      -HashAlgorithmName SHA256 `
+      -CryptoProviderName "RSA#Microsoft Software Key Storage Provider" `
+      -Force -ErrorAction SilentlyContinue
+    Install-AdcsWebEnrollment -Force -ErrorAction SilentlyContinue
+
+- name: Set ESC1 on User template
+  ansible.windows.win_shell: |
+    $configNC = ([ADSI]"LDAP://RootDSE").configurationNamingContext
+    $userTpl = [ADSI]"LDAP://CN=User,CN=Certificate Templates,CN=Public Key Services,CN=Services,$configNC"
+    $userTpl.Put("msPKI-Certificate-Name-Flag", 1)
+    $userTpl.SetInfo()
+
+- name: Create GPO with cpassword
+  ansible.windows.win_shell: |
+    Import-Module GroupPolicy
+    $gpo = New-GPO -Name "{{ gpo_cpassword_name }}" -ErrorAction SilentlyContinue
+    if ($gpo) {
+      $gpoId = $gpo.Id.ToString("B").ToUpper()
+      $sysvolPath = "C:\Windows\SYSVOL\domain\Policies\$gpoId"
+      New-Item -Path "$sysvolPath\Machine\Preferences\Groups" -ItemType Directory -Force | Out-Null
+      $xml = @"
+    <?xml version="1.0" encoding="utf-8"?>
+    <Groups clsid="{3125E937-EB16-4b4c-9934-544FC6D24D26}">
+      <User clsid="{DF5F1855-51E5-4d24-8B1A-D9BDE98BA1D1}" name="{{ gpo_cpassword_user }}" image="2" changed="2026-10-22 12:00:00" uid="{CE475392-6DEF-4B5A-B323-5742DE103481}">
+        <Properties action="U" newName="" fullName="Service Deploy Account" description="Deployment service account" cpassword="{{ gpo_cpassword_value }}" changeLogon="0" noChange="1" neverExpires="1" acctDisabled="0" userName="{{ gpo_cpassword_user }}"/>
+      </User>
+    </Groups>
+    "@
+      Set-Content -Path "$sysvolPath\Machine\Preferences\Groups\Groups.xml" -Value $xml
+      New-GPLink -Guid $gpo.Id -Target "{{ child_domain_dn }}" -LinkEnabled Yes | Out-Null
+    }
+
+- name: Create SMB shares with sensitive data
+  ansible.windows.win_shell: |
+    New-Item -Path C:\Shares\HR,C:\Shares\Accounting,C:\Shares\IT -ItemType Directory -Force | Out-Null
+    Set-Content C:\Shares\HR\employee_ssn.txt "Employee SSN List`nMichael Scott - 123-45-6789`nDwight Schrute - 987-65-4321"
+    Set-Content C:\Shares\HR\salary_review.txt "Salary Review 2026`nPayroll admin: dwallace / Suck1tDevice!"
+    Set-Content C:\Shares\IT\backup_sql.ps1 "# SQL Backup`n`$cred = 'SQLSvc2026!'`nInvoke-Sqlcmd -ServerInstance DM-SQL01 -Username sa -Password `$cred"
+    Set-Content C:\Shares\Accounting\q3_revenue.txt "Q3 2026 Revenue: 4200069"
+    New-SmbShare -Name HR -Path C:\Shares\HR -FullAccess '{{ child_fqdn }}\Domain Admins' -ReadAccess '{{ child_fqdn }}\Domain Users' -EA SilentlyContinue | Out-Null
+    New-SmbShare -Name IT -Path C:\Shares\IT -FullAccess '{{ child_fqdn }}\Domain Admins' -ReadAccess '{{ child_fqdn }}\Domain Users' -EA SilentlyContinue | Out-Null
+    New-SmbShare -Name Accounting -Path C:\Shares\Accounting -FullAccess '{{ child_fqdn }}\Scranton-Accounting' -ReadAccess '{{ child_fqdn }}\Domain Users' -EA SilentlyContinue | Out-Null

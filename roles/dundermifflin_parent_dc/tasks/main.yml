@@ -1,0 +1,106 @@
+---
+# dundermifflin_parent_dc — runs on DM-DC01 AFTER Ludus promotes it as forest root DC
+
+- name: Wait for AD DS to be fully operational
+  ansible.windows.win_shell: |
+    $timeout = 300
+    $start = Get-Date
+    while ((Get-Date) - $start -lt [TimeSpan]::FromSeconds($timeout)) {
+      try {
+        Get-ADDomain -ErrorAction Stop | Out-Null
+        Write-Output "AD_READY"
+        exit 0
+      } catch {
+        Start-Sleep -Seconds 10
+      }
+    }
+    Write-Error "AD DS not ready after $timeout seconds"
+    exit 1
+  register: ad_ready
+  changed_when: false
+  retries: 3
+  delay: 30
+  until: ad_ready.stdout is search("AD_READY")
+
+- name: Create Corporate OUs
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    $ous = @(
+      "OU=Corporate,{{ parent_domain_dn }}",
+      "OU=Users,OU=Corporate,{{ parent_domain_dn }}",
+      "OU=Groups,OU=Corporate,{{ parent_domain_dn }}",
+      "OU=Service Accounts,OU=Corporate,{{ parent_domain_dn }}"
+    )
+    foreach ($ou in $ous) {
+      $name = ($ou -split ",")[0] -replace "OU=",""
+      $path = ($ou -split ",",2)[1]
+      if (-not (Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$ou'" -ErrorAction SilentlyContinue)) {
+        New-ADOrganizationalUnit -Name $name -Path $path
+      }
+    }
+
+- name: Create corporate groups
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for group in corporate_groups %}
+    New-ADGroup -Name "{{ group.name }}" -GroupScope Global -GroupCategory Security -Path "OU=Groups,OU=Corporate,{{ parent_domain_dn }}" -ErrorAction SilentlyContinue
+    {% endfor %}
+
+- name: Create corporate users
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    $pw = ConvertTo-SecureString "{{ item.password }}" -AsPlainText -Force
+    $names = "{{ item.name }}".Split(" ", 2)
+    New-ADUser -Name "{{ item.name }}" -SamAccountName "{{ item.sam }}" `
+      -UserPrincipalName "{{ item.sam }}@{{ parent_domain }}" `
+      -GivenName $names[0] -Surname $names[1] `
+      -Title "{{ item.title }}" -Department "{{ item.department }}" `
+      -Path "OU=Users,OU=Corporate,{{ parent_domain_dn }}" `
+      -AccountPassword $pw -Enabled $true -ErrorAction SilentlyContinue
+  loop: "{{ corporate_users }}"
+
+- name: Add users to groups
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for user in corporate_users %}
+    {% for group in user.groups %}
+    Add-ADGroupMember -Identity "{{ group }}" -Members "{{ user.sam }}" -ErrorAction SilentlyContinue
+    {% endfor %}
+    {% endfor %}
+
+- name: Create service accounts with SPNs
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for svc in service_accounts %}
+    $pw = ConvertTo-SecureString "{{ svc.password }}" -AsPlainText -Force
+    New-ADUser -Name "{{ svc.sam }}" -SamAccountName "{{ svc.sam }}" `
+      -UserPrincipalName "{{ svc.sam }}@{{ parent_domain }}" `
+      -Path "OU=Service Accounts,OU=Corporate,{{ parent_domain_dn }}" `
+      -AccountPassword $pw -Enabled $true -PasswordNeverExpires $true -ErrorAction SilentlyContinue
+    Set-ADUser -Identity "{{ svc.sam }}" -ServicePrincipalNames @{Add=@({% for spn in svc.spns %}"{{ spn }}"{% if not loop.last %},{% endif %}{% endfor %})} -ErrorAction SilentlyContinue
+    {% endfor %}
+
+- name: Set unconstrained delegation on SQL server
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    Set-ADComputer -Identity "{{ sql_computer_name }}" -TrustedForDelegation $true -ErrorAction SilentlyContinue
+
+- name: Create GPO with cpassword
+  ansible.windows.win_shell: |
+    Import-Module GroupPolicy
+    $gpo = New-GPO -Name "{{ gpo_cpassword_name }}" -ErrorAction SilentlyContinue
+    if ($gpo) {
+      $gpoId = $gpo.Id.ToString("B").ToUpper()
+      $sysvolPath = "C:\Windows\SYSVOL\domain\Policies\$gpoId"
+      New-Item -Path "$sysvolPath\Machine\Preferences\Groups" -ItemType Directory -Force | Out-Null
+      $xml = @"
+    <?xml version="1.0" encoding="utf-8"?>
+    <Groups clsid="{3125E937-EB16-4b4c-9934-544FC6D24D26}">
+      <User clsid="{DF5F1855-51E5-4d24-8B1A-D9BDE98BA1D1}" name="{{ gpo_cpassword_user }}" image="2" changed="2026-10-22 12:00:00" uid="{AE475392-6DEF-4B5A-B323-5742DE103481}">
+        <Properties action="U" newName="" fullName="Backup Service" description="Nightly backup runner" cpassword="{{ gpo_cpassword_value }}" changeLogon="0" noChange="1" neverExpires="1" acctDisabled="0" userName="{{ gpo_cpassword_user }}"/>
+      </User>
+    </Groups>
+    "@
+      Set-Content -Path "$sysvolPath\Machine\Preferences\Groups\Groups.xml" -Value $xml
+      New-GPLink -Guid $gpo.Id -Target "{{ parent_domain_dn }}" -LinkEnabled Yes | Out-Null
+    }

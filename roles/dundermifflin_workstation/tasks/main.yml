@@ -1,0 +1,31 @@
+---
+# dundermifflin_workstation — joins scranton.dundermifflin.local and adds local admin
+
+- name: Set DNS to child DC
+  ansible.windows.win_dns_client:
+    adapter_names: "*"
+    dns_servers:
+      - "{{ child_dc_ip }}"
+
+- name: Join scranton.dundermifflin.local domain
+  microsoft.ad.membership:
+    dns_domain_name: "{{ child_fqdn }}"
+    domain_admin_user: "{{ child_fqdn }}\\domainadmin"
+    domain_admin_password: "{{ domain_admin_password }}"
+    domain_ou_path: "OU=Workstations,OU=Scranton,{{ child_domain_dn }}"
+    state: domain
+    reboot: true
+  register: domain_join
+
+- name: Wait for reboot after domain join
+  ansible.builtin.wait_for_connection:
+    timeout: 300
+    delay: 30
+  when: domain_join is changed
+
+- name: Add mscott to local Administrators
+  ansible.windows.win_group_membership:
+    name: Administrators
+    members:
+      - "{{ child_fqdn }}\\{{ local_admin_user }}"
+    state: present

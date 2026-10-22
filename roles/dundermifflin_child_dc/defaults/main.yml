@@ -1,0 +1,35 @@
+---
+parent_domain: dundermifflin.local
+parent_domain_dn: "DC=dundermifflin,DC=local"
+child_domain: scranton
+child_fqdn: scranton.dundermifflin.local
+child_domain_dn: "DC=scranton,DC=dundermifflin,DC=local"
+parent_dc_ip: "10.{{ range_second_octet }}.10.10"
+safe_mode_password: "SafeMode2026!"
+domain_admin_password: "password"
+
+scranton_users:
+  - { name: "Michael Scott",    sam: mscott,      password: "Password1",      title: "Regional Manager",     dept: "Management",  groups: ["Scranton-Management"], asrep: true }
+  - { name: "Dwight Schrute",   sam: dschrute,    password: "Beets2026!",     title: "Asst Regional Mgr",    dept: "Sales",       groups: ["Scranton-Management", "Scranton-Sales"] }
+  - { name: "Jim Halpert",      sam: jhalpert,    password: "BigTuna01",      title: "Sales Rep",            dept: "Sales",       groups: ["Scranton-Sales"] }
+  - { name: "Pam Beesly",       sam: pbeesly,     password: "Art2026!",       title: "Receptionist",         dept: "Reception",   groups: ["Scranton-Reception"] }
+  - { name: "Angela Martin",    sam: amartin,     password: "Cats4Ever!",     title: "Head of Accounting",   dept: "Accounting",  groups: ["Scranton-Accounting"] }
+  - { name: "Kevin Malone",     sam: kmalone,     password: "Kevin1!",        title: "Accountant",           dept: "Accounting",  groups: ["Scranton-Accounting"], asrep: true, description: "Password is Kevin1! - DO NOT CHANGE - Kevin keeps forgetting" }
+  - { name: "Oscar Martinez",   sam: omartinez,   password: "Actually2026!",  title: "Accountant",           dept: "Accounting",  groups: ["Scranton-Accounting"] }
+  - { name: "Stanley Hudson",   sam: shudson,     password: "Pretzel1",       title: "Sales Rep",            dept: "Sales",       groups: ["Scranton-Sales"] }
+  - { name: "Toby Flenderson",  sam: tflenderson, password: "Divorced3x",     title: "HR Rep",               dept: "HR",          groups: ["Scranton-HR"] }
+  - { name: "Creed Bratton",    sam: cbratton,    password: "Cr33dBr4tt0n",   title: "Quality Assurance",    dept: "QA",          groups: ["Scranton-QA"], privileged_groups: ["Backup Operators", "Server Operators"], writedacl_target: "Domain Admins" }
+
+scranton_groups:
+  - Scranton-Management
+  - Scranton-Sales
+  - Scranton-Accounting
+  - Scranton-HR
+  - Scranton-Reception
+  - Scranton-QA
+
+gpo_cpassword_name: "Scranton-LocalAdmin-Deploy"
+gpo_cpassword_user: "svc-deploy"
+gpo_cpassword_value: "j1Uyj3Vx8TY9LtLZil2uAuZkFQA/4latT76ZwgdHdhw"
+
+adcs_ca_name: "Scranton-CA"
