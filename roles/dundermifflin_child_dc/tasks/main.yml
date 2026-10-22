@@ -14,6 +14,13 @@
     state: present
   register: adds_install
 
+- name: Check if child domain already exists
+  ansible.windows.win_shell: |
+    try { Get-ADDomain -Identity "{{ child_fqdn }}" -ErrorAction Stop | Out-Null; Write-Output "EXISTS" } catch { Write-Output "NOT_FOUND" }
+  register: child_domain_check
+  changed_when: false
+  failed_when: false
+
 - name: Promote as child domain DC
   ansible.windows.win_shell: |
     $pw = ConvertTo-SecureString "{{ domain_admin_password }}" -AsPlainText -Force
@@ -31,8 +38,7 @@
       -Force:$true `
       -ErrorAction Stop
   register: child_dc_promo
-
-  failed_when: false
+  when: child_domain_check.stdout is not search("EXISTS")
 - name: Wait for reboot after promotion
   ansible.builtin.wait_for_connection:
     timeout: 600
