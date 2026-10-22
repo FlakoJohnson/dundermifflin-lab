@@ -160,7 +160,6 @@ ludus:
         - john
         - hashcat
         - chisel
-        - tailscale
     testing:
       snapshot: false
       block_internet: false
