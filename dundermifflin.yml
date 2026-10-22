@@ -160,7 +160,7 @@ ludus:
         - john
         - hashcat
         - chisel
-        - crackmapexec
+        - tailscale
     testing:
       snapshot: false
       block_internet: false
