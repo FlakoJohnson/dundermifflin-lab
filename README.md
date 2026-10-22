@@ -1,6 +1,6 @@
 # Dunder Mifflin AD Lab
 
-An Active Directory attack lab themed after *The Office*, built for [Ludus](https://ludus.cloud). Two-domain forest with parent/child trust, ADCS, vulnerable GPOs, kerberoastable and AS-REP roastable accounts, and a loaded Kali attacker VM.
+An Active Directory attack lab themed after *The Office*, built for [Ludus](https://ludus.cloud). Two-domain forest with parent/child trust, ADCS (ESC1–16), vulnerable GPOs, kerberoastable and AS-REP roastable accounts, cached DA credentials, and a loaded Kali attacker VM.
 
 ## Lab Design
 
@@ -56,7 +56,7 @@ ludus range logs -f
 
 | User | sAMAccountName | Role | Password | Groups | Notes |
 |------|---------------|------|----------|--------|-------|
-| David Wallace | dwallace | CFO | Suck1tDevice! | Domain Admins, Corporate-Executives | DA in parent domain |
+| David Wallace | dwallace | CFO | Suck1tDevice! | Domain Admins, Corporate-Executives | DA in parent domain, cached creds on SQL01 |
 | Jan Levinson | jlevinson | VP Sales | Candles2026! | Corporate-Executives | |
 | Ryan Howard | rhoward | Temp | WUPHF2026! | Corporate-IT | |
 | svc-sql | svc-sql | SQL Service | SQLSvc2026! | — | Kerberoastable (MSSQLSvc SPN) |
@@ -76,6 +76,22 @@ ludus range logs -f
 | Toby Flenderson | tflenderson | HR Rep | Divorced3x | Scranton-HR | |
 | Creed Bratton | cbratton | Quality Assurance | Cr33dBr4tt0n | Scranton-QA, Backup Operators, Server Operators | WriteDacl on Domain Admins |
 
+### ADCS ESC Users (created by `badsectorlabs.ludus_adcs`)
+
+| User | sAMAccountName | Character | ESC Role |
+|------|---------------|-----------|----------|
+| Andy Bernard | abernard | The Nard Dog | ESC5 — CA object rights |
+| Robert California | rcalifornia | The Lizard King | ESC7 — CA manager |
+| Angela (cert) | amartin_cert | Angela's cert admin | ESC7 — Certificate manager |
+| Kelly Kapoor | kellykapoor | Customer Service | ESC9 — GenericAll target |
+| Meredith Palmer | meredithr | Supplier Relations | ESC10 — Weak cert binding |
+| Darryl Philbin | darryljr | Warehouse | ESC13 — Issuance policy |
+| Phyllis Vance | phyllisvance | Sales | ESC14 — attacker |
+| Todd Packer | todpacker | Travelling Salesman | ESC14 — target |
+| Gabe Lewis | glewis | Corporate IT | ESC16 — NTDS CA security |
+
+Template names are realistic (WorkstationAuth, SubordinateCA, EnrollmentAgent, etc.) instead of ESC1/ESC2.
+
 ## Attack Surface
 
 | Vulnerability | Type | Details |
@@ -83,10 +99,11 @@ ludus range logs -f
 | AS-REP Roast | Credential | mscott (Password1), kmalone (Kevin1!) |
 | Kerberoast | Credential | svc-sql (SQLSvc2026!) — MSSQLSvc/DM-SQL01:1433 |
 | GPP cpassword | Credential | Two GPOs: Corporate-ServiceAccount-Deploy (svc-backup), Scranton-LocalAdmin-Deploy (svc-deploy) |
-| ADCS ESC1–16 | Privilege Escalation | Full Certified Pre-Owned attack surface via `badsectorlabs.ludus_adcs` — ESC1 through ESC16 templates |
+| ADCS ESC1–16 | Privilege Escalation | Full Certified Pre-Owned attack surface via [`badsectorlabs.ludus_adcs`](https://github.com/badsectorlabs/ludus_adcs) with Office-themed users and realistic template names |
 | ADCS ESC8 | Privilege Escalation | HTTP-based web enrollment on SC-DC01 — NTLM relay target |
 | Unconstrained Delegation | Privilege Escalation | DM-SQL01 — coerce + relay for TGT capture |
 | Excessive Privileges | Privilege Escalation | cbratton in Backup Operators + Server Operators + WriteDacl on Domain Admins |
+| Cached DA Credentials | Credential | dwallace (DA) logged into DM-SQL01 — LSASS dump recovers DA hash |
 | Password in Description | Credential | kmalone LDAP description contains password |
 | Credentials in Shares | Credential | \\SC-DC01\IT\backup_sql.ps1 (SQL SA password), \\SC-DC01\HR\salary_review.txt (dwallace password) |
 | Local Admin | Lateral Movement | mscott is local admin on SC-WS01 and SC-WS02 |
@@ -95,7 +112,7 @@ ludus range logs -f
 
 ## Requirements
 
-- Ludus 2.3+ with NFR/Pro license (for router roles)
+- Ludus 2.3+ (needed for correct license activation and role support)
 - Templates: `win2019-server-x64-template`, `win11-22h2-x64-enterprise-template`, `kali-x64-desktop-template`, `debian-12-x64-server-template`
 - Minimum 24 GB RAM for the range (5 Windows VMs @ 4GB + Kali @ 4GB + router @ 2GB)
 
@@ -110,20 +127,21 @@ ludus range logs -f
 
 ## Kali Tools
 
-The Kali VM comes pre-installed with: nmap, netexec, impacket-scripts, bloodhound, certipy-ad, responder, evil-winrm, smbclient, ldap-utils, john, hashcat, chisel, crackmapexec.
+The Kali VM comes pre-installed with: nmap, netexec, impacket-scripts, bloodhound, certipy-ad, responder, evil-winrm, smbclient, ldap-utils, john, hashcat, chisel.
 
 ## Architecture Notes
 
-- **Parent DC** (DM-DC01): Promoted by Ludus natively via the `domain` config block
-- **Child DC** (SC-DC01): Promoted by the `dundermifflin_child_dc` Ansible role using `Install-ADDSDomain -DomainType ChildDomain`
-- **SQL Server** (DM-SQL01): Domain-joined by Ludus natively, post-config by `dundermifflin_member` role
-- **Workstations**: Domain-joined to scranton by the `dundermifflin_workstation` role
-- **ADCS**: Installed by [`badsectorlabs.ludus_adcs`](https://github.com/badsectorlabs/ludus_adcs) — ESC1 through ESC16 vulnerable templates out of the box
+- **Parent DC** (DM-DC01): Promoted by Ludus natively via the `domain` config block. After deployment, simulates a DA logon to SQL01 to leave cached credentials in LSASS.
+- **Child DC** (SC-DC01): Promoted by the `dundermifflin_child_dc` Ansible role using `Install-ADDSDomain -DomainType ChildDomain`. Skips promotion on re-runs (checks if domain exists first).
+- **SQL Server** (DM-SQL01): Domain-joined by Ludus natively, post-config by `dundermifflin_member` role. Contains cached DA credentials from the simulated logon.
+- **Workstations**: Domain-joined to scranton by the `dundermifflin_workstation` role using parent domain credentials.
+- **ADCS**: Installed by [`badsectorlabs.ludus_adcs`](https://github.com/badsectorlabs/ludus_adcs) on SC-DC01 with `role_vars` overrides (child DC has no native Ludus domain block). ESC1 through ESC16 vulnerable templates with Office-themed users and realistic template names.
 
 ## Troubleshooting
 
 - **Server 2022 template**: Do NOT use — Edge Appx blocks sysprep, causing SID duplication. Use `win2019-server-x64-template` instead.
 - **Debian 11 router**: Stale apt repos. The config overrides to `debian-12-x64-server-template`.
 - **WinRM timeouts**: The R610 (or similar constrained hardware) may struggle with 6 VMs sysprepping simultaneously. Ludus handles retries; a resume deploy usually completes what the first pass missed.
-- **ADCS on child DC**: Requires Enterprise Admins membership. The `dundermifflin_child_dc` role adds `localuser` to Enterprise Admins on the parent DC before installing ADCS. If ADCS fails with `ERROR_DS_RANGE_CONSTRAINT`, check Enterprise Admins membership.
+- **ADCS on child DC**: The `badsectorlabs.ludus_adcs` role handles Enterprise Admins via `ludus_adcs_domain_username` (set to `dundermifflin\domainadmin`). If ADCS fails with `ERROR_DS_RANGE_CONSTRAINT`, verify the domain admin account has Enterprise Admins membership.
 - **Workstation domain join**: Uses parent domain creds (`dundermifflin.local\domainadmin`) to join the child domain — the child domain doesn't have its own `domainadmin` account.
+- **ludus_adcs idempotency**: The upstream role is not fully idempotent on re-runs. A [UPN fix PR](https://github.com/badsectorlabs/ludus_adcs/pull/12) addresses user creation failures on repeated deploys.
