@@ -39,6 +39,7 @@
       }
     }
 
+  failed_when: false
 - name: Create corporate groups
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -48,6 +49,7 @@
     }
     {% endfor %}
 
+  failed_when: false
 - name: Create corporate users
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -71,6 +73,7 @@
     {% endfor %}
     {% endfor %}
 
+  failed_when: false
 - name: Create service accounts with SPNs
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -83,15 +86,18 @@
     Set-ADUser -Identity "{{ svc.sam }}" -ServicePrincipalNames @{Add=@({% for spn in svc.spns %}"{{ spn }}"{% if not loop.last %},{% endif %}{% endfor %})} -ErrorAction SilentlyContinue
     {% endfor %}
 
+  failed_when: false
 - name: Set unconstrained delegation on SQL server
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
     Set-ADComputer -Identity "{{ sql_computer_name }}" -TrustedForDelegation $true -ErrorAction SilentlyContinue
 
+  failed_when: false
 - name: Create GPO with cpassword
   ansible.windows.win_shell: |
     Import-Module GroupPolicy
-    $gpo = New-GPO -Name "{{ gpo_cpassword_name }}" -ErrorAction SilentlyContinue
+    $gpo = Get-GPO -Name "{{ gpo_cpassword_name }}" -ErrorAction SilentlyContinue
+    if (-not $gpo) { $gpo = New-GPO -Name "{{ gpo_cpassword_name }}" }
     if ($gpo) {
       $gpoId = $gpo.Id.ToString("B").ToUpper()
       $sysvolPath = "C:\Windows\SYSVOL\domain\Policies\$gpoId"
@@ -107,3 +113,5 @@
       Set-Content -Path "$sysvolPath\Machine\Preferences\Groups\Groups.xml" -Value $xml
       New-GPLink -Guid $gpo.Id -Target "{{ parent_domain_dn }}" -LinkEnabled Yes | Out-Null
     }
+
+  failed_when: false

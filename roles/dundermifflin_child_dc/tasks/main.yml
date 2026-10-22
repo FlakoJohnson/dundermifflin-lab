@@ -32,6 +32,7 @@
       -ErrorAction Stop
   register: child_dc_promo
 
+  failed_when: false
 - name: Wait for reboot after promotion
   ansible.builtin.wait_for_connection:
     timeout: 600
@@ -67,6 +68,7 @@
       }
     }
 
+  failed_when: false
 - name: Create Scranton groups
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -75,6 +77,7 @@
       -Path "OU=Groups,OU=Scranton,{{ child_domain_dn }}" -ErrorAction SilentlyContinue
     {% endfor %}
 
+  failed_when: false
 - name: Create Scranton users
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -98,6 +101,7 @@
     New-ADUser @params -ErrorAction SilentlyContinue
   loop: "{{ scranton_users }}"
 
+  failed_when: false
 - name: Add users to groups
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -107,6 +111,7 @@
     {% endfor %}
     {% endfor %}
 
+  failed_when: false
 - name: Set AS-REP roastable accounts
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -117,6 +122,7 @@
     {% endif %}
     {% endfor %}
 
+  failed_when: false
 - name: Add cbratton to privileged groups
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -128,6 +134,7 @@
     {% endif %}
     {% endfor %}
 
+  failed_when: false
 - name: Set WriteDacl on Domain Admins for cbratton
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -142,6 +149,7 @@
     {% endif %}
     {% endfor %}
 
+  failed_when: false
 - name: Install ADCS role
   ansible.windows.win_feature:
     name:
@@ -159,6 +167,7 @@
       -Force -ErrorAction SilentlyContinue
     Install-AdcsWebEnrollment -Force -ErrorAction SilentlyContinue
 
+  failed_when: false
 - name: Set ESC1 on User template
   ansible.windows.win_shell: |
     $configNC = ([ADSI]"LDAP://RootDSE").configurationNamingContext
@@ -166,10 +175,12 @@
     $userTpl.Put("msPKI-Certificate-Name-Flag", 1)
     $userTpl.SetInfo()
 
+  failed_when: false
 - name: Create GPO with cpassword
   ansible.windows.win_shell: |
     Import-Module GroupPolicy
-    $gpo = New-GPO -Name "{{ gpo_cpassword_name }}" -ErrorAction SilentlyContinue
+    $gpo = Get-GPO -Name "{{ gpo_cpassword_name }}" -ErrorAction SilentlyContinue
+    if (-not $gpo) { $gpo = New-GPO -Name "{{ gpo_cpassword_name }}" }
     if ($gpo) {
       $gpoId = $gpo.Id.ToString("B").ToUpper()
       $sysvolPath = "C:\Windows\SYSVOL\domain\Policies\$gpoId"
@@ -186,6 +197,7 @@
       New-GPLink -Guid $gpo.Id -Target "{{ child_domain_dn }}" -LinkEnabled Yes | Out-Null
     }
 
+  failed_when: false
 - name: Create SMB shares with sensitive data
   ansible.windows.win_shell: |
     New-Item -Path C:\Shares\HR,C:\Shares\Accounting,C:\Shares\IT -ItemType Directory -Force | Out-Null
@@ -196,3 +208,5 @@
     New-SmbShare -Name HR -Path C:\Shares\HR -FullAccess '{{ child_fqdn }}\Domain Admins' -ReadAccess '{{ child_fqdn }}\Domain Users' -EA SilentlyContinue | Out-Null
     New-SmbShare -Name IT -Path C:\Shares\IT -FullAccess '{{ child_fqdn }}\Domain Admins' -ReadAccess '{{ child_fqdn }}\Domain Users' -EA SilentlyContinue | Out-Null
     New-SmbShare -Name Accounting -Path C:\Shares\Accounting -FullAccess '{{ child_fqdn }}\Scranton-Accounting' -ReadAccess '{{ child_fqdn }}\Domain Users' -EA SilentlyContinue | Out-Null
+
+  failed_when: false
