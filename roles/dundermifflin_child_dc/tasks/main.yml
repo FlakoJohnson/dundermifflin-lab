@@ -31,7 +31,6 @@
       -Force:$true `
       -ErrorAction Stop
   register: child_dc_promo
-  ignore_errors: true
 
 - name: Wait for reboot after promotion
   ansible.builtin.wait_for_connection:

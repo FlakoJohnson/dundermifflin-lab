@@ -43,7 +43,9 @@
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
     {% for group in corporate_groups %}
-    New-ADGroup -Name "{{ group.name }}" -GroupScope Global -GroupCategory Security -Path "OU=Groups,OU=Corporate,{{ parent_domain_dn }}" -ErrorAction SilentlyContinue
+    if (-not (Get-ADGroup -Filter 'Name -eq "{{ group.name }}"' -ErrorAction SilentlyContinue)) {
+      New-ADGroup -Name "{{ group.name }}" -GroupScope Global -GroupCategory Security -Path "OU=Groups,OU=Corporate,{{ parent_domain_dn }}"
+    }
     {% endfor %}
 
 - name: Create corporate users
@@ -58,6 +60,7 @@
       -Path "OU=Users,OU=Corporate,{{ parent_domain_dn }}" `
       -AccountPassword $pw -Enabled $true -ErrorAction SilentlyContinue
   loop: "{{ corporate_users }}"
+  failed_when: false
 
 - name: Add users to groups
   ansible.windows.win_shell: |
