@@ -65,6 +65,7 @@ ludus:
           - vm_name: "{{ range_id }}-SC-DC01"
             role: dundermifflin_child_dc
     role_vars:
+      # ADCS core config (child DC has no native domain block)
       ludus_adcs_domain: "scranton"
       ludus_adcs_dc: "{{ range_id }}-SC-DC01"
       ludus_adcs_dc_ip: "10.{{ range_second_octet }}.10.20"
@@ -75,6 +76,35 @@ ludus:
       ludus_adcs_ca_common_name: "scranton-CA"
       ludus_domain_netbios_name: "scranton"
       ludus_domain_fqdn_tail: "dundermifflin.local"
+      # Office-themed ESC users (new accounts created by ludus_adcs)
+      ludus_adcs_esc5_user: abernard
+      ludus_adcs_esc5_password: "NardDog2026!"
+      ludus_adcs_esc7_ca_manager_user: rcalifornia
+      ludus_adcs_esc7_ca_manager_password: "Lizard1King!"
+      ludus_adcs_esc7_cert_manager_user: amartin_cert
+      ludus_adcs_esc7_cert_manager_password: "Cats4Ever!"
+      ludus_adcs_esc9_user: kellykapoor
+      ludus_adcs_esc9_password: "Fashion2026!"
+      ludus_adcs_esc10_user: meredithr
+      ludus_adcs_esc10_password: "HappyHour1!"
+      ludus_adcs_esc13_user: darryljr
+      ludus_adcs_esc13_password: "Warehouse1!"
+      ludus_adcs_esc14_user: phyllisvance
+      ludus_adcs_esc14_password: "BobVance2026!"
+      ludus_adcs_esc14_target_user: todpacker
+      ludus_adcs_esc14_target_password: "Packman2026!"
+      ludus_adcs_esc16_user: glewis
+      ludus_adcs_esc16_password: "Pretzel1Day!"
+      # Realistic template names
+      ludus_adcs_template_display_names:
+        ESC1: "WorkstationAuth"
+        ESC2: "SubordinateCA"
+        ESC3: "EnrollmentAgent"
+        ESC3_CRA: "CertRequestAgent"
+        ESC4: "UserAuthCert"
+        ESC7_CERTMGR: "CertManagerTemplate"
+        ESC9: "WebServerAuth"
+        ESC13: "SmartcardLogon"
 
   # ── Workstations ──
   - vm_name: "{{ range_id }}-SC-WS01"
