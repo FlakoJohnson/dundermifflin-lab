@@ -9,3 +9,29 @@
   register: domain_check
   changed_when: false
   failed_when: "'dundermifflin' not in domain_check.stdout"
+
+- name: Enable WDigest credential caching (lab misconfiguration)
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest
+    name: UseLogonCredential
+    data: 1
+    type: dword
+
+- name: Create recurring scheduled task as DA (caches creds in LSASS via type 4 batch logon)
+  ansible.windows.win_shell: |
+    $taskName = "CorpBackupSync"
+    $user = "{{ parent_domain }}\{{ da_user }}"
+    $password = "{{ da_password }}"
+    $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c whoami > C:\Users\Public\last_logon.txt && echo %DATE% %TIME% >> C:\Users\Public\last_logon.txt && ping -n 3600 127.0.0.1 > nul"
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Hours 0)
+
+    $existing = Get-ScheduledTask | Where-Object { $_.TaskName -eq $taskName }
+    if ($existing) { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false }
+
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -User $user -Password $password -Settings $settings
+    Start-ScheduledTask -TaskName $taskName
+    Write-Output "TASK_CREATED"
+  register: task_result
+  changed_when: "'TASK_CREATED' in task_result.stdout"
+  failed_when: false

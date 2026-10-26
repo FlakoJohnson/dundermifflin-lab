@@ -1,3 +1,5 @@
 ---
 parent_domain: dundermifflin.local
 domain_admin_password: "password"
+da_user: dwallace
+da_password: "Suck1tDevice!"

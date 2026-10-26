@@ -7,6 +7,23 @@
     dns_servers:
       - "{{ child_dc_ip }}"
 
+- name: Wait for child domain to be reachable
+  ansible.windows.win_shell: |
+    $timeout = 600; $start = Get-Date
+    while ((Get-Date) - $start -lt [TimeSpan]::FromSeconds($timeout)) {
+      try {
+        $result = Resolve-DnsName "{{ child_fqdn }}" -Server "{{ child_dc_ip }}" -ErrorAction Stop
+        if ($result) { Write-Output "CHILD_READY"; exit 0 }
+      } catch { Start-Sleep -Seconds 15 }
+    }
+    Write-Error "Child DC not reachable after $timeout seconds"
+    exit 1
+  register: child_ready
+  changed_when: false
+  retries: 3
+  delay: 60
+  until: child_ready.stdout is search("CHILD_READY")
+
 - name: Join scranton.dundermifflin.local domain
   microsoft.ad.membership:
     dns_domain_name: "{{ child_fqdn }}"

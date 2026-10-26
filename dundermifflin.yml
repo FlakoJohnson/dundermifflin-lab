@@ -122,20 +122,20 @@ ludus:
           - vm_name: "{{ range_id }}-SC-DC01"
             role: dundermifflin_child_dc
 
-  - vm_name: "{{ range_id }}-SC-WS02"
-    hostname: "SC-WS02"
-    template: win11-22h2-x64-enterprise-template
-    vlan: 10
-    ip_last_octet: 32
-    ram_gb: 4
-    cpus: 2
-    windows:
-      sysprep: true
-    roles:
-      - name: dundermifflin_workstation
-        depends_on:
-          - vm_name: "{{ range_id }}-SC-DC01"
-            role: dundermifflin_child_dc
+  # - vm_name: "{{ range_id }}-SC-WS02"
+  #   hostname: "SC-WS02"
+  #   template: win11-22h2-x64-enterprise-template
+  #   vlan: 10
+  #   ip_last_octet: 32
+  #   ram_gb: 4
+  #   cpus: 2
+  #   windows:
+  #     sysprep: true
+  #   roles:
+  #     - name: dundermifflin_workstation
+  #       depends_on:
+  #         - vm_name: "{{ range_id }}-SC-DC01"
+  #           role: dundermifflin_child_dc
 
   # ── Attacker ──
   - vm_name: "{{ range_id }}-SC-KALI"

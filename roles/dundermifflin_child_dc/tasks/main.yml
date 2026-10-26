@@ -7,6 +7,25 @@
     dns_servers:
       - "{{ parent_dc_ip }}"
 
+- name: Wait for parent DC AD to be reachable
+  ansible.windows.win_shell: |
+    $timeout = 600; $start = Get-Date
+    while ((Get-Date) - $start -lt [TimeSpan]::FromSeconds($timeout)) {
+      try {
+        $dns = Resolve-DnsName "{{ parent_domain }}" -Server "{{ parent_dc_ip }}" -ErrorAction Stop
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $tcp.Connect("{{ parent_dc_ip }}", 389)
+        if ($tcp.Connected) { $tcp.Close(); Write-Output "PARENT_READY"; exit 0 }
+      } catch { Start-Sleep -Seconds 10 }
+    }
+    Write-Error "Parent DC not reachable after $timeout seconds"
+    exit 1
+  register: parent_ready
+  changed_when: false
+  retries: 3
+  delay: 30
+  until: parent_ready.stdout is search("PARENT_READY")
+
 - name: Install AD DS role
   ansible.windows.win_feature:
     name: AD-Domain-Services
