@@ -33,22 +33,30 @@ All VMs on VLAN 10 (`10.x.10.0/24`). Router at `.254`.
 git clone https://github.com/FlakoJohnson/dundermifflin-lab.git
 cd dundermifflin-lab
 
-# 1. Install roles (custom + community ADCS)
+# 1. Add the win2019 template (not in the default Ludus source)
+ludus templates add -d /opt/ludus/sources/*/templates/win2019-server-x64
+ludus templates build -n win2019-server-x64-template
+# Wait for the build to complete (~45 min)
+ludus templates status
+
+# 2. Install roles (custom + community ADCS)
 ludus ansible role add -d roles/dundermifflin_parent_dc
 ludus ansible role add -d roles/dundermifflin_child_dc
 ludus ansible role add -d roles/dundermifflin_member
 ludus ansible role add -d roles/dundermifflin_workstation
 ludus ansible role add badsectorlabs.ludus_adcs
 
-# 2. Set the config
+# 3. Set the config
 ludus range config set -f dundermifflin.yml
 
-# 3. Deploy
+# 4. Deploy
 ludus range deploy
 
-# 4. Monitor
+# 5. Monitor
 ludus range logs -f
 ```
+
+> **Note:** Ludus 2.3+ no longer ships `win2019-server-x64-template` by default. Step 1 adds it from the BSL community source. If the glob path doesn't match, find it with `find /opt/ludus/sources -name "win2019-server-x64" -type d`.
 
 ## Users
 
