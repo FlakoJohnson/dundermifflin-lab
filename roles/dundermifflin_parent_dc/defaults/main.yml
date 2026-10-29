@@ -2,7 +2,7 @@
 parent_domain: dundermifflin.local
 parent_domain_dn: "DC=dundermifflin,DC=local"
 safe_mode_password: "SafeMode2026!"
-domain_admin_password: "DM-Adm1n2026!"
+# domain_admin_password provided by global_role_vars in dundermifflin.yml
 
 corporate_users:
   - name: "David Wallace"
