@@ -61,17 +61,17 @@ ludus:
       ludus_mssql_ad_logins:
         - username: "dundermifflin\\svc-sql"
           sysadmin: true
-        - username: "dundermifflin\\domainuser"
+        - username: "dundermifflin\\rhoward"
           sysadmin: false
       # SQL login for brute-force / app compromise path
       ludus_mssql_sql_users:
         - username: "appuser"
           password: "App2026!"
           sysadmin: false
-      # Impersonation: domainuser → sa (login-level escalation to sysadmin)
+      # Impersonation: rhoward → sa (AS-REP roast → SQL login → impersonate sa → xp_cmdshell)
       ludus_mssql_impersonations:
         - grantor: "sa"
-          grantee: "dundermifflin\\domainuser"
+          grantee: "dundermifflin\\rhoward"
       # DB impersonation: appuser → dbo in msdb (Agent job access)
       ludus_mssql_impersonation_users:
         - login: "appuser"
