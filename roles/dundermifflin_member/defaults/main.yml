@@ -1,5 +1,5 @@
 ---
 parent_domain: dundermifflin.local
-domain_admin_password: "{{ ad_domain_admin_password }}"
+domain_admin_password: "DM-Adm1n2026!"
 da_user: dwallace
 da_password: "Suck1tDevice!"

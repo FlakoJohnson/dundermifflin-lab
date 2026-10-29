@@ -132,7 +132,7 @@
 - name: Reset Ludus default account passwords to match config
   ansible.windows.win_shell: |
     net user domainadmin "{{ domain_admin_password }}" /domain
-    net user domainuser "{{ ad_domain_user_password }}" /domain
+    net user domainuser "{{ domain_user_password }}" /domain
     net user Administrator "{{ domain_admin_password }}" /domain
 
   # DA logon simulation moved to dundermifflin_member role (runs on DM-SQL01 directly)

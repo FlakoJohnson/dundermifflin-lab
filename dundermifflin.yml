@@ -10,6 +10,10 @@ defaults:
   ad_domain_user_password: "DM-User2026!"
   ad_domain_safe_mode_password: SafeMode2026!
 
+global_role_vars:
+  domain_admin_password: "DM-Adm1n2026!"
+  domain_user_password: "DM-User2026!"
+
 ludus:
   # ── Parent Domain: dundermifflin.local ──
   - vm_name: "{{ range_id }}-DM-DC01"

@@ -6,7 +6,7 @@ child_fqdn: scranton.dundermifflin.local
 child_domain_dn: "DC=scranton,DC=dundermifflin,DC=local"
 parent_dc_ip: "10.{{ range_second_octet }}.10.10"
 safe_mode_password: "SafeMode2026!"
-domain_admin_password: "{{ ad_domain_admin_password }}"
+domain_admin_password: "DM-Adm1n2026!"
 
 scranton_users:
   - { name: "Michael Scott",    sam: mscott,      password: "Password1",      title: "Regional Manager",     dept: "Management",  groups: ["Scranton-Management"], asrep: true }

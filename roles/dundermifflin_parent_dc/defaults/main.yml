@@ -2,7 +2,7 @@
 parent_domain: dundermifflin.local
 parent_domain_dn: "DC=dundermifflin,DC=local"
 safe_mode_password: "SafeMode2026!"
-domain_admin_password: "{{ ad_domain_admin_password }}"
+domain_admin_password: "DM-Adm1n2026!"
 
 corporate_users:
   - name: "David Wallace"
