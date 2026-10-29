@@ -128,26 +128,16 @@
 
   failed_when: false
 
-- name: Reset Ludus default account passwords to match config (runs as SYSTEM)
+- name: Reset Ludus default account passwords to match config
   ansible.windows.win_shell: |
-    $script = @'
-    Import-Module ActiveDirectory
-    Set-ADAccountPassword -Identity "domainadmin" -Reset -NewPassword (ConvertTo-SecureString '{{ domain_admin_password }}' -AsPlainText -Force)
-    Set-ADAccountPassword -Identity "domainuser" -Reset -NewPassword (ConvertTo-SecureString '{{ ad_domain_user_password }}' -AsPlainText -Force)
-    Set-ADAccountPassword -Identity "Administrator" -Reset -NewPassword (ConvertTo-SecureString '{{ domain_admin_password }}' -AsPlainText -Force)
-    '@
-    $bytes = [Text.Encoding]::Unicode.GetBytes($script)
-    $encoded = [Convert]::ToBase64String($bytes)
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -EncodedCommand $encoded"
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-    Register-ScheduledTask -TaskName "LudusResetPW" -Action $action -Principal $principal -Force | Out-Null
-    Start-ScheduledTask -TaskName "LudusResetPW"
-    $timeout = 30; $elapsed = 0
-    do { Start-Sleep -Seconds 2; $elapsed += 2; $state = (Get-ScheduledTask -TaskName "LudusResetPW").State } while ($state -eq 'Running' -and $elapsed -lt $timeout)
-    Unregister-ScheduledTask -TaskName "LudusResetPW" -Confirm:$false
-    Write-Output "PW_RESET_DONE"
-  register: pw_reset
-  changed_when: "'PW_RESET_DONE' in pw_reset.stdout"
+    net user domainadmin "{{ domain_admin_password }}" /domain
+    net user domainuser "{{ ad_domain_user_password }}" /domain
+    net user Administrator "{{ domain_admin_password }}" /domain
+  vars:
+    ansible_become: true
+    ansible_become_method: runas
+    ansible_become_user: "{{ parent_domain }}\\domainadmin"
+    ansible_become_password: "password"
   failed_when: false
 
   # DA logon simulation moved to dundermifflin_member role (runs on DM-SQL01 directly)
