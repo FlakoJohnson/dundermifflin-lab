@@ -137,6 +137,20 @@
     {% endfor %}
 
   failed_when: false
+- name: Create child domain service accounts with SPNs
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for svc in child_service_accounts %}
+    $pw = ConvertTo-SecureString "{{ svc.password }}" -AsPlainText -Force
+    New-ADUser -Name "{{ svc.sam }}" -SamAccountName "{{ svc.sam }}" `
+      -UserPrincipalName "{{ svc.sam }}@{{ child_fqdn }}" `
+      -Path "OU=Users,OU=Scranton,{{ child_domain_dn }}" `
+      -AccountPassword $pw -Enabled $true -PasswordNeverExpires $true -ErrorAction SilentlyContinue
+    Set-ADUser -Identity "{{ svc.sam }}" -ServicePrincipalNames @{Add=@({% for spn in svc.spns %}"{{ spn }}"{% if not loop.last %},{% endif %}{% endfor %})} -ErrorAction SilentlyContinue
+    {% endfor %}
+
+  failed_when: false
+
 - name: Set AS-REP roastable accounts
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -173,6 +187,65 @@
     Set-Acl ("AD:" + $target.DistinguishedName) $acl
     {% endif %}
     {% endfor %}
+
+  failed_when: false
+- name: Configure constrained delegation with protocol transition on svc-print
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for svc in child_service_accounts %}
+    Set-ADUser -Identity "{{ svc.sam }}" -Add @{"msDS-AllowedToDelegateTo"=@({% for spn in svc.spns %}"{{ spn }}"{% if not loop.last %},{% endif %}{% endfor %})} -ErrorAction SilentlyContinue
+    Set-ADAccountControl -Identity "{{ svc.sam }}" -TrustedToAuthForDelegation $true -ErrorAction SilentlyContinue
+    {% endfor %}
+
+  failed_when: false
+
+- name: Add tflenderson to DnsAdmins (DACL chain endpoint)
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    Add-ADGroupMember -Identity "DnsAdmins" -Members "tflenderson" -ErrorAction SilentlyContinue
+
+  failed_when: false
+
+- name: Configure DACL abuse chain (jhalpert -> dschrute -> tflenderson -> DnsAdmins)
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    $jhalpert = Get-ADUser "jhalpert"
+    $dschrute = Get-ADUser "dschrute"
+    $tflenderson = Get-ADUser "tflenderson"
+    # Hop 1: jhalpert GenericWrite on dschrute
+    $acl1 = Get-Acl ("AD:" + $dschrute.DistinguishedName)
+    $ace1 = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($jhalpert.SID, "GenericWrite", "Allow")
+    $acl1.AddAccessRule($ace1)
+    Set-Acl ("AD:" + $dschrute.DistinguishedName) $acl1
+    # Hop 2: dschrute ForceChangePassword on tflenderson
+    $resetPwdGuid = [GUID]"00299570-246d-11d0-a768-00aa006e0529"
+    $acl2 = Get-Acl ("AD:" + $tflenderson.DistinguishedName)
+    $ace2 = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($dschrute.SID, "ExtendedRight", "Allow", $resetPwdGuid)
+    $acl2.AddAccessRule($ace2)
+    Set-Acl ("AD:" + $tflenderson.DistinguishedName) $acl2
+
+  failed_when: false
+
+- name: Configure targeted kerberoast path (amartin GenericWrite on shudson)
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    $amartin = Get-ADUser "amartin"
+    $shudson = Get-ADUser "shudson"
+    $acl = Get-Acl ("AD:" + $shudson.DistinguishedName)
+    $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($amartin.SID, "GenericWrite", "Allow")
+    $acl.AddAccessRule($ace)
+    Set-Acl ("AD:" + $shudson.DistinguishedName) $acl
+
+  failed_when: false
+
+- name: Configure cross-domain path (dschrute GenericWrite on parent Corporate-IT)
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    $childUser = Get-ADUser "dschrute"
+    $de = New-Object DirectoryServices.DirectoryEntry("LDAP://{{ parent_dc_ip }}/CN=Corporate-IT,OU=Groups,OU=Corporate,{{ parent_domain_dn }}", "{{ parent_domain }}\domainadmin", "{{ domain_admin_password }}")
+    $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($childUser.SID, "GenericWrite", "Allow")
+    $de.ObjectSecurity.AddAccessRule($ace)
+    $de.CommitChanges()
 
   failed_when: false
 

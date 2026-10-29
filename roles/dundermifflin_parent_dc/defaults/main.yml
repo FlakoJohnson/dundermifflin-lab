@@ -10,7 +10,7 @@ corporate_users:
     password: "Suck1tDevice!"
     title: "CFO"
     department: "Executive"
-    groups: ["Corporate-Executives", "Domain Admins"]
+    groups: ["Corporate-Executives", "Domain Admins", "Enterprise Admins"]
   - name: "Jan Levinson"
     sam: jlevinson
     password: "Candles2026!"
@@ -23,6 +23,7 @@ corporate_users:
     title: "Temp"
     department: "IT"
     groups: ["Corporate-IT"]
+    asrep: true
 
 service_accounts:
   - name: "svc-sql"

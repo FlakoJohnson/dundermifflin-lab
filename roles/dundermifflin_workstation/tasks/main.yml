@@ -46,3 +46,20 @@
     members:
       - "{{ child_fqdn }}\\{{ local_admin_user }}"
     state: present
+
+- name: Configure RBCD path (pbeesly GenericWrite on this workstation)
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    $pbeesly = Get-ADUser "pbeesly" -Server "{{ child_dc_ip }}"
+    $computer = Get-ADComputer "{{ ansible_hostname }}" -Server "{{ child_dc_ip }}"
+    $acl = Get-Acl ("AD:" + $computer.DistinguishedName)
+    $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($pbeesly.SID, "GenericWrite", "Allow")
+    $acl.AddAccessRule($ace)
+    Set-Acl ("AD:" + $computer.DistinguishedName) $acl
+  vars:
+    ansible_become: true
+    ansible_become_method: runas
+    ansible_become_user: "{{ parent_domain }}\\{{ domain_admin_user }}"
+    ansible_become_password: "{{ domain_admin_password }}"
+
+  failed_when: false
