@@ -28,6 +28,14 @@ scranton_groups:
   - Scranton-Reception
   - Scranton-QA
 
+child_service_accounts:
+  - name: "svc-print"
+    sam: svc-print
+    password: "Pr1ntSvc2026!"
+    spns:
+      - "HTTP/SC-DC01.scranton.dundermifflin.local"
+      - "HTTP/SC-DC01"
+
 gpo_cpassword_name: "Scranton-LocalAdmin-Deploy"
 gpo_cpassword_user: "svc-deploy"
 gpo_cpassword_value: "j1Uyj3Vx8TY9LtLZil2uAuZkFQA/4latT76ZwgdHdhw"

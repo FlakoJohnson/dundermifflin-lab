@@ -74,6 +74,18 @@
     {% endfor %}
 
   failed_when: false
+- name: Set AS-REP roastable accounts
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    {% for user in corporate_users %}
+    {% if user.asrep is defined and user.asrep %}
+    $u = Get-ADUser "{{ user.sam }}" -Properties userAccountControl
+    Set-ADUser "{{ user.sam }}" -Replace @{userAccountControl = ($u.userAccountControl -bor 0x400000)}
+    {% endif %}
+    {% endfor %}
+
+  failed_when: false
+
 - name: Create service accounts with SPNs
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
