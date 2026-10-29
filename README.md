@@ -1,6 +1,6 @@
 # Dunder Mifflin AD Lab
 
-An Active Directory attack lab themed after *The Office*, built for [Ludus](https://ludus.cloud). Two-domain forest with parent/child trust, ADCS (ESC1–16), vulnerable GPOs, kerberoastable and AS-REP roastable accounts, cached DA credentials, and a loaded Kali attacker VM.
+An Active Directory attack lab themed after *The Office*, built for [Ludus](https://ludus.cloud). Two-domain forest with parent/child trust, MSSQL Server with impersonation chains, ADCS (ESC1–16), DACL abuse chains, constrained/unconstrained delegation, RBCD, cross-domain ACL abuse, and a loaded Kali attacker VM.
 
 ## Lab Design
 
@@ -10,17 +10,16 @@ An Active Directory attack lab themed after *The Office*, built for [Ludus](http
                     │         (Corporate HQ)           │
                     │                                  │
                     │  DM-DC01  (.10)  Root DC         │
-                    │  DM-SQL01 (.11)  SQL Server      │
+                    │  DM-SQL01 (.11)  MSSQL Server    │
                     └──────────────┬───────────────────┘
-                                   │ forest trust
+                                   │ parent/child trust
                     ┌──────────────┴───────────────────┐
                     │  scranton.dundermifflin.local     │
                     │       (Scranton Branch)           │
                     │                                   │
                     │  SC-DC01  (.20)  Child DC + ADCS  │
-                    │  SC-WS01  (.31)  Win 11 Wkst      │
-                    │  SC-WS02  (.32)  Win 11 Wkst      │
-                    │  SC-KALI  (.99)  Attacker          │
+                    │  SC-WS01  (.31)  Win 11 Wkst     │
+                    │  SC-KALI  (.99)  Attacker         │
                     └───────────────────────────────────┘
 ```
 
@@ -39,12 +38,13 @@ ludus templates build -n win2019-server-x64-template
 # Wait for the build to complete (~45 min)
 ludus templates status
 
-# 2. Install roles (custom + community ADCS)
+# 2. Install roles (custom + community)
 ludus ansible role add -d roles/dundermifflin_parent_dc
 ludus ansible role add -d roles/dundermifflin_child_dc
 ludus ansible role add -d roles/dundermifflin_member
 ludus ansible role add -d roles/dundermifflin_workstation
 ludus ansible role add badsectorlabs.ludus_adcs
+ludus ansible role add badsectorlabs.ludus_mssql
 
 # 3. Set the config
 ludus range config set -f dundermifflin.yml
@@ -64,25 +64,28 @@ ludus range logs -f
 
 | User | sAMAccountName | Role | Password | Groups | Notes |
 |------|---------------|------|----------|--------|-------|
-| David Wallace | dwallace | CFO | Suck1tDevice! | Domain Admins, Corporate-Executives | DA in parent domain, cached creds on SQL01 |
+| David Wallace | dwallace | CFO | Suck1tDevice! | Domain Admins, Enterprise Admins, Corporate-Executives | DA+EA, cached creds on SQL01 |
 | Jan Levinson | jlevinson | VP Sales | Candles2026! | Corporate-Executives | |
-| Ryan Howard | rhoward | Temp | WUPHF2026! | Corporate-IT | |
-| svc-sql | svc-sql | SQL Service | SQLSvc2026! | — | Kerberoastable (MSSQLSvc SPN) |
+| Ryan Howard | rhoward | Temp | WUPHF2026! | Corporate-IT | AS-REP roastable, SQL login with sa impersonation |
+| svc-sql | svc-sql | SQL Service | SQLSvc2026! | — | Kerberoastable (MSSQLSvc SPN), SQL sysadmin |
+| svc-backup | — | — | — | — | GPP cpassword in SYSVOL |
 
 ### scranton.dundermifflin.local (Scranton Branch)
 
 | User | sAMAccountName | Role | Password | Groups | Notes |
 |------|---------------|------|----------|--------|-------|
-| Michael Scott | mscott | Regional Manager | Password1 | Scranton-Management | AS-REP roastable, local admin on WS01/WS02 |
-| Dwight Schrute | dschrute | Asst. Regional Mgr | Beets2026! | Scranton-Management, Scranton-Sales | |
-| Jim Halpert | jhalpert | Sales Rep | BigTuna01 | Scranton-Sales | |
-| Pam Beesly | pbeesly | Receptionist | Art2026! | Scranton-Reception | |
-| Angela Martin | amartin | Head of Accounting | Cats4Ever! | Scranton-Accounting | |
+| Michael Scott | mscott | Regional Manager | Password1 | Scranton-Management | AS-REP roastable, local admin on WS01 |
+| Dwight Schrute | dschrute | Asst. Regional Mgr | Beets2026! | Scranton-Management, Scranton-Sales | GenericWrite target (from jhalpert), ForceChangePassword on tflenderson, GenericWrite on parent Corporate-IT |
+| Jim Halpert | jhalpert | Sales Rep | BigTuna01 | Scranton-Sales | GenericWrite on dschrute (DACL chain entry) |
+| Pam Beesly | pbeesly | Receptionist | Art2026! | Scranton-Reception | GenericWrite on SC-WS01 (RBCD) |
+| Angela Martin | amartin | Head of Accounting | Cats4Ever! | Scranton-Accounting | GenericWrite on shudson (targeted kerberoast) |
 | Kevin Malone | kmalone | Accountant | Kevin1! | Scranton-Accounting | AS-REP roastable, password in LDAP description |
 | Oscar Martinez | omartinez | Accountant | Actually2026! | Scranton-Accounting | |
-| Stanley Hudson | shudson | Sales Rep | Pretzel1 | Scranton-Sales | |
-| Toby Flenderson | tflenderson | HR Rep | Divorced3x | Scranton-HR | |
+| Stanley Hudson | shudson | Sales Rep | Pretzel1 | Scranton-Sales | GenericWrite target (from amartin, for targeted kerberoast) |
+| Toby Flenderson | tflenderson | HR Rep | Divorced3x | Scranton-HR, DnsAdmins | ForceChangePassword target (from dschrute), DACL chain endpoint |
 | Creed Bratton | cbratton | Quality Assurance | Cr33dBr4tt0n | Scranton-QA, Backup Operators, Server Operators | WriteDacl on Domain Admins |
+| svc-print | svc-print | Print Service | Pr1ntSvc2026! | — | Kerberoastable (HTTP SPN), constrained delegation → CIFS/SC-DC01 |
+| svc-deploy | — | — | — | — | GPP cpassword in SYSVOL |
 
 ### ADCS ESC Users (created by `badsectorlabs.ludus_adcs`)
 
@@ -100,23 +103,72 @@ ludus range logs -f
 
 Template names are realistic (WorkstationAuth, SubordinateCA, EnrollmentAgent, etc.) instead of ESC1/ESC2.
 
+### MSSQL Accounts (on DM-SQL01)
+
+| Login | Type | Password | Role | Notes |
+|-------|------|----------|------|-------|
+| dundermifflin\svc-sql | AD | SQLSvc2026! | sysadmin | Kerberoast → SQL sysadmin → xp_cmdshell |
+| dundermifflin\rhoward | AD | WUPHF2026! | public | EXECUTE AS LOGIN = 'sa' (impersonation → sysadmin) |
+| appuser | SQL | App2026! | public | EXECUTE AS USER = 'dbo' in msdb (Agent job access) |
+| sa | SQL | sa_P@ssw0rd! | sysadmin | Brute-force target |
+
 ## Attack Surface
 
-| Vulnerability | Type | Details |
-|--------------|------|---------|
-| AS-REP Roast | Credential | mscott (Password1), kmalone (Kevin1!) |
-| Kerberoast | Credential | svc-sql (SQLSvc2026!) — MSSQLSvc/DM-SQL01:1433 |
-| GPP cpassword | Credential | Two GPOs: Corporate-ServiceAccount-Deploy (svc-backup), Scranton-LocalAdmin-Deploy (svc-deploy) |
-| ADCS ESC1–16 | Privilege Escalation | Full Certified Pre-Owned attack surface via [`badsectorlabs.ludus_adcs`](https://github.com/badsectorlabs/ludus_adcs) with Office-themed users and realistic template names |
-| ADCS ESC8 | Privilege Escalation | HTTP-based web enrollment on SC-DC01 — NTLM relay target |
-| Unconstrained Delegation | Privilege Escalation | DM-SQL01 — coerce + relay for TGT capture |
-| Excessive Privileges | Privilege Escalation | cbratton in Backup Operators + Server Operators + WriteDacl on Domain Admins |
-| Cached DA Credentials | Credential | dwallace (DA) logged into DM-SQL01 — LSASS dump recovers DA hash |
-| Password in Description | Credential | kmalone LDAP description contains password |
-| Credentials in Shares | Credential | \\SC-DC01\IT\backup_sql.ps1 (SQL SA password), \\SC-DC01\HR\salary_review.txt (dwallace password) |
-| Local Admin | Lateral Movement | mscott is local admin on SC-WS01 and SC-WS02 |
-| Domain Admin (parent) | Privilege Escalation | dwallace is DA in dundermifflin.local — cross-forest escalation via trust |
-| Weak Passwords | Credential | Multiple sprayable passwords (Password1, Pretzel1, BigTuna01, etc.) |
+### Credential Access
+
+| Vulnerability | Details |
+|--------------|---------|
+| AS-REP Roast | rhoward (parent), mscott + kmalone (child) |
+| Kerberoast | svc-sql/MSSQLSvc (parent), svc-print/HTTP (child) |
+| GPP cpassword | Corporate-ServiceAccount-Deploy (svc-backup), Scranton-LocalAdmin-Deploy (svc-deploy) |
+| Cached DA Credentials | dwallace logged into DM-SQL01 — LSASS dump recovers DA hash |
+| Password in Description | kmalone LDAP description contains password |
+| Credentials in Shares | \\\\SC-DC01\IT\backup_sql.ps1 (SQL creds), \\\\SC-DC01\HR\salary_review.txt (dwallace password) |
+| Weak Passwords | Multiple sprayable: Password1, Pretzel1, BigTuna01, Kevin1! |
+
+### MSSQL Attack Paths
+
+| Path | Chain |
+|------|-------|
+| Kerberoast → xp_cmdshell | Kerberoast svc-sql → crack → SQL auth as sysadmin → xp_cmdshell |
+| AS-REP → impersonation → xp_cmdshell | AS-REP roast rhoward → SQL auth → EXECUTE AS LOGIN = 'sa' → xp_cmdshell |
+| SQL brute → dbo impersonation | appuser (App2026!) → EXECUTE AS USER = 'dbo' in msdb → Agent job access |
+| SA brute force | sa (sa_P@ssw0rd!) → direct sysadmin → xp_cmdshell |
+| Coerced authentication | Any SQL access → xp_dirtree to attacker → NTLMv2 (machine account, pairs with unconstrained delegation) |
+
+### DACL Abuse
+
+| Path | Chain |
+|------|-------|
+| 3-hop DACL chain | jhalpert → GenericWrite → dschrute → ForceChangePassword → tflenderson (DnsAdmins → DLL injection on DC) |
+| Targeted kerberoast | amartin → GenericWrite → shudson (set SPN, roast, clean up) |
+| WriteDACL → DA | cbratton → WriteDACL on Domain Admins |
+| Cross-domain ACL | dschrute (child) → GenericWrite on parent Corporate-IT group |
+
+### Delegation
+
+| Path | Details |
+|------|---------|
+| Unconstrained delegation | DM-SQL01 — coerce + capture TGT |
+| Constrained delegation (S4U) | svc-print → CIFS/SC-DC01 with protocol transition |
+| RBCD | pbeesly → GenericWrite on SC-WS01 (create machine account, configure delegation) |
+
+### Certificate Abuse
+
+| Path | Details |
+|------|---------|
+| ADCS ESC1–16 | Full Certified Pre-Owned attack surface via [`badsectorlabs.ludus_adcs`](https://github.com/badsectorlabs/ludus_adcs) |
+| ADCS ESC8 | HTTP-based web enrollment on SC-DC01 — NTLM relay target |
+
+### Privilege Escalation
+
+| Path | Details |
+|------|---------|
+| Backup Operators | cbratton — backup SAM/SYSTEM for offline hash extraction |
+| Server Operators | cbratton — service control for code execution on DCs |
+| DnsAdmins | tflenderson — DLL injection on domain controller |
+| Enterprise Admin | dwallace — forest-wide privilege |
+| Local Admin | mscott on SC-WS01 |
 
 ## Requirements
 
@@ -139,10 +191,10 @@ The Kali VM comes pre-installed with: nmap, netexec, impacket-scripts, bloodhoun
 
 ## Architecture Notes
 
-- **Parent DC** (DM-DC01): Promoted by Ludus natively via the `domain` config block. After deployment, simulates a DA logon to SQL01 to leave cached credentials in LSASS.
-- **Child DC** (SC-DC01): Promoted by the `dundermifflin_child_dc` Ansible role using `Install-ADDSDomain -DomainType ChildDomain`. Skips promotion on re-runs (checks if domain exists first).
-- **SQL Server** (DM-SQL01): Domain-joined by Ludus natively, post-config by `dundermifflin_member` role. Contains cached DA credentials from the simulated logon.
-- **Workstations**: Domain-joined to scranton by the `dundermifflin_workstation` role using parent domain credentials.
+- **Parent DC** (DM-DC01): Promoted by Ludus natively via the `domain` config block. Creates corporate users, groups, GPP cpassword GPO, and configures AS-REP roastable accounts.
+- **Child DC** (SC-DC01): Promoted by the `dundermifflin_child_dc` Ansible role using `Install-ADDSDomain -DomainType ChildDomain`. Creates Scranton users/groups, configures DACL abuse chain, constrained delegation, targeted kerberoast path, cross-domain ACL, DnsAdmins membership, GPP cpassword, and SMB shares. Skips promotion on re-runs (checks if domain exists first).
+- **MSSQL Server** (DM-SQL01): Domain-joined by Ludus natively. SQL Server 2019 installed by [`badsectorlabs.ludus_mssql`](https://github.com/badsectorlabs/ludus_mssql) with mixed-mode auth, xp_cmdshell, impersonation chains, and SA enabled. Post-config by `dundermifflin_member` enables WDigest and simulates DA logon for LSASS credential caching. Unconstrained delegation set by parent DC role.
+- **Workstations** (SC-WS01): Domain-joined to scranton by the `dundermifflin_workstation` role using parent domain credentials. RBCD path configured (pbeesly GenericWrite on computer object).
 - **ADCS**: Installed by [`badsectorlabs.ludus_adcs`](https://github.com/badsectorlabs/ludus_adcs) on SC-DC01 with `role_vars` overrides (child DC has no native Ludus domain block). ESC1 through ESC16 vulnerable templates with Office-themed users and realistic template names.
 
 ## Troubleshooting
