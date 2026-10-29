@@ -10,6 +10,13 @@
   changed_when: false
   failed_when: "'dundermifflin' not in domain_check.stdout"
 
+- name: Reset local Administrator password
+  ansible.windows.win_user:
+    name: Administrator
+    password: "{{ domain_admin_password }}"
+    update_password: always
+  failed_when: false
+
 - name: Enable WDigest credential caching (lab misconfiguration)
   ansible.windows.win_regedit:
     path: HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest

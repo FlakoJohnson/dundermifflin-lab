@@ -1,6 +1,11 @@
 ---
 # dundermifflin_parent_dc — runs on DM-DC01 AFTER Ludus promotes it as forest root DC
 
+- name: Ensure localuser is in Domain Admins (required for Ansible role operations)
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    Add-ADGroupMember -Identity "Domain Admins" -Members (Get-ADUser -Identity "localuser") -ErrorAction SilentlyContinue
+
 - name: Wait for AD DS to be fully operational
   ansible.windows.win_shell: |
     $timeout = 300
@@ -84,8 +89,6 @@
     {% endif %}
     {% endfor %}
 
-  failed_when: false
-
 - name: Create service accounts with SPNs
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -102,9 +105,7 @@
 - name: Set unconstrained delegation on SQL server
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
-    Set-ADComputer -Identity "{{ sql_computer_name }}" -TrustedForDelegation $true -ErrorAction SilentlyContinue
-
-  failed_when: false
+    Set-ADComputer -Identity "{{ sql_computer_name }}" -TrustedForDelegation $true
 - name: Create GPO with cpassword
   ansible.windows.win_shell: |
     Import-Module GroupPolicy
@@ -127,6 +128,12 @@
     }
 
   failed_when: false
+
+- name: Reset Ludus default account passwords to match config
+  ansible.windows.win_shell: |
+    net user domainadmin "{{ domain_admin_password }}" /domain
+    net user domainuser "{{ domain_user_password }}" /domain
+    net user Administrator "{{ domain_admin_password }}" /domain
 
   # DA logon simulation moved to dundermifflin_member role (runs on DM-SQL01 directly)
   # Start-Process -Credential creates a type 2 interactive logon that caches in LSASS

@@ -161,7 +161,6 @@
     {% endif %}
     {% endfor %}
 
-  failed_when: false
 - name: Add cbratton to privileged groups
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -172,8 +171,8 @@
     {% endfor %}
     {% endif %}
     {% endfor %}
-
   failed_when: false
+
 - name: Set WriteDacl on Domain Admins for cbratton
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -188,22 +187,18 @@
     {% endif %}
     {% endfor %}
 
-  failed_when: false
 - name: Configure constrained delegation with protocol transition on svc-print
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
     {% for svc in child_service_accounts %}
     Set-ADUser -Identity "{{ svc.sam }}" -Add @{"msDS-AllowedToDelegateTo"=@({% for spn in svc.spns %}"{{ spn }}"{% if not loop.last %},{% endif %}{% endfor %})} -ErrorAction SilentlyContinue
-    Set-ADAccountControl -Identity "{{ svc.sam }}" -TrustedToAuthForDelegation $true -ErrorAction SilentlyContinue
+    Set-ADAccountControl -Identity "{{ svc.sam }}" -TrustedToAuthForDelegation $true
     {% endfor %}
-
-  failed_when: false
 
 - name: Add tflenderson to DnsAdmins (DACL chain endpoint)
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
     Add-ADGroupMember -Identity "DnsAdmins" -Members "tflenderson" -ErrorAction SilentlyContinue
-
   failed_when: false
 
 - name: Configure DACL abuse chain (jhalpert -> dschrute -> tflenderson -> DnsAdmins)
@@ -212,19 +207,15 @@
     $jhalpert = Get-ADUser "jhalpert"
     $dschrute = Get-ADUser "dschrute"
     $tflenderson = Get-ADUser "tflenderson"
-    # Hop 1: jhalpert GenericWrite on dschrute
     $acl1 = Get-Acl ("AD:" + $dschrute.DistinguishedName)
     $ace1 = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($jhalpert.SID, "GenericWrite", "Allow")
     $acl1.AddAccessRule($ace1)
     Set-Acl ("AD:" + $dschrute.DistinguishedName) $acl1
-    # Hop 2: dschrute ForceChangePassword on tflenderson
     $resetPwdGuid = [GUID]"00299570-246d-11d0-a768-00aa006e0529"
     $acl2 = Get-Acl ("AD:" + $tflenderson.DistinguishedName)
     $ace2 = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($dschrute.SID, "ExtendedRight", "Allow", $resetPwdGuid)
     $acl2.AddAccessRule($ace2)
     Set-Acl ("AD:" + $tflenderson.DistinguishedName) $acl2
-
-  failed_when: false
 
 - name: Configure targeted kerberoast path (amartin GenericWrite on shudson)
   ansible.windows.win_shell: |
@@ -236,8 +227,6 @@
     $acl.AddAccessRule($ace)
     Set-Acl ("AD:" + $shudson.DistinguishedName) $acl
 
-  failed_when: false
-
 - name: Configure cross-domain path (dschrute GenericWrite on parent Corporate-IT)
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -246,8 +235,6 @@
     $ace = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($childUser.SID, "GenericWrite", "Allow")
     $de.ObjectSecurity.AddAccessRule($ace)
     $de.CommitChanges()
-
-  failed_when: false
 
 # ADCS is handled by badsectorlabs.ludus_adcs role (separate role in the config)
 # It installs ADCS, configures ESC1-16 vulnerable templates, and web enrollment

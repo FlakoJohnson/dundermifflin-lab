@@ -4,5 +4,5 @@ child_fqdn: scranton.dundermifflin.local
 child_domain_dn: "DC=scranton,DC=dundermifflin,DC=local"
 child_dc_ip: "10.{{ range_second_octet }}.10.20"
 domain_admin_user: domainadmin
-domain_admin_password: "password"
+# domain_admin_password provided by global_role_vars in dundermifflin.yml
 local_admin_user: mscott
