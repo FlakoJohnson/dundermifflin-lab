@@ -1,6 +1,14 @@
 ---
 # dundermifflin_parent_dc — runs on DM-DC01 AFTER Ludus promotes it as forest root DC
 
+- name: Ensure localuser is in Domain Admins (required for Ansible role operations)
+  ansible.windows.win_group_membership:
+    name: Domain Admins
+    members:
+      - localuser
+    state: present
+  failed_when: false
+
 - name: Wait for AD DS to be fully operational
   ansible.windows.win_shell: |
     $timeout = 300
@@ -128,21 +136,11 @@
 
   failed_when: false
 
-- name: Reset Ludus default account passwords via SYSTEM scheduled task
+- name: Reset Ludus default account passwords to match config
   ansible.windows.win_shell: |
-    $script = "net user domainadmin '{{ domain_admin_password }}' /domain; net user domainuser '{{ ad_domain_user_password }}' /domain; net user Administrator '{{ domain_admin_password }}' /domain"
-    $bytes = [System.Text.Encoding]::Unicode.GetBytes($script)
-    $encoded = [Convert]::ToBase64String($bytes)
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -EncodedCommand $encoded"
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-    Register-ScheduledTask -TaskName "LudusResetPW" -Action $action -Principal $principal -Force | Out-Null
-    Start-ScheduledTask -TaskName "LudusResetPW"
-    $timeout = 30; $elapsed = 0
-    do { Start-Sleep -Seconds 2; $elapsed += 2; $state = (Get-ScheduledTask -TaskName "LudusResetPW").State } while ($state -eq 'Running' -and $elapsed -lt $timeout)
-    Unregister-ScheduledTask -TaskName "LudusResetPW" -Confirm:$false
-    Write-Output "PW_RESET_DONE"
-  register: pw_reset
-  changed_when: "'PW_RESET_DONE' in pw_reset.stdout"
+    net user domainadmin "{{ domain_admin_password }}" /domain
+    net user domainuser "{{ ad_domain_user_password }}" /domain
+    net user Administrator "{{ domain_admin_password }}" /domain
   failed_when: false
 
   # DA logon simulation moved to dundermifflin_member role (runs on DM-SQL01 directly)
