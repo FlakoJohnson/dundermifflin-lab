@@ -128,25 +128,27 @@
 
   failed_when: false
 
-- name: Reset domainadmin password (from old default)
-  ansible.windows.win_shell: |
-    net user domainadmin "{{ domain_admin_password }}" /domain
-  vars:
-    ansible_become: true
-    ansible_become_method: runas
-    ansible_become_user: "{{ parent_domain }}\\domainadmin"
-    ansible_become_password: "password"
-  failed_when: false
+- name: Write password reset script
+  ansible.windows.win_copy:
+    content: |
+      net user domainadmin "{{ domain_admin_password }}" /domain
+      net user domainuser "{{ ad_domain_user_password }}" /domain
+      net user Administrator "{{ domain_admin_password }}" /domain
+    dest: C:\Windows\Temp\ludus-reset-pw.cmd
 
-- name: Reset domainuser and Administrator passwords
+- name: Reset Ludus default account passwords via SYSTEM scheduled task
   ansible.windows.win_shell: |
-    net user domainuser "{{ ad_domain_user_password }}" /domain
-    net user Administrator "{{ domain_admin_password }}" /domain
-  vars:
-    ansible_become: true
-    ansible_become_method: runas
-    ansible_become_user: "{{ parent_domain }}\\domainadmin"
-    ansible_become_password: "{{ domain_admin_password }}"
+    $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c C:\Windows\Temp\ludus-reset-pw.cmd"
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName "LudusResetPW" -Action $action -Principal $principal -Force | Out-Null
+    Start-ScheduledTask -TaskName "LudusResetPW"
+    $timeout = 30; $elapsed = 0
+    do { Start-Sleep -Seconds 2; $elapsed += 2; $state = (Get-ScheduledTask -TaskName "LudusResetPW").State } while ($state -eq 'Running' -and $elapsed -lt $timeout)
+    Unregister-ScheduledTask -TaskName "LudusResetPW" -Confirm:$false
+    Remove-Item "C:\Windows\Temp\ludus-reset-pw.cmd" -Force -ErrorAction SilentlyContinue
+    Write-Output "PW_RESET_DONE"
+  register: pw_reset
+  changed_when: "'PW_RESET_DONE' in pw_reset.stdout"
   failed_when: false
 
   # DA logon simulation moved to dundermifflin_member role (runs on DM-SQL01 directly)
