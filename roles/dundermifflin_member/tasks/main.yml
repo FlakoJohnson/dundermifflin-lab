@@ -15,6 +15,7 @@
     name: Administrator
     password: "{{ domain_admin_password }}"
     update_password: always
+  failed_when: false
 
 - name: Enable WDigest credential caching (lab misconfiguration)
   ansible.windows.win_regedit:

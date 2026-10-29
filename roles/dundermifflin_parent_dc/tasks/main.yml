@@ -7,7 +7,6 @@
     members:
       - localuser
     state: present
-  failed_when: false
 
 - name: Wait for AD DS to be fully operational
   ansible.windows.win_shell: |
@@ -92,8 +91,6 @@
     {% endif %}
     {% endfor %}
 
-  failed_when: false
-
 - name: Create service accounts with SPNs
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
@@ -110,9 +107,7 @@
 - name: Set unconstrained delegation on SQL server
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
-    Set-ADComputer -Identity "{{ sql_computer_name }}" -TrustedForDelegation $true -ErrorAction SilentlyContinue
-
-  failed_when: false
+    Set-ADComputer -Identity "{{ sql_computer_name }}" -TrustedForDelegation $true
 - name: Create GPO with cpassword
   ansible.windows.win_shell: |
     Import-Module GroupPolicy
@@ -141,7 +136,6 @@
     net user domainadmin "{{ domain_admin_password }}" /domain
     net user domainuser "{{ ad_domain_user_password }}" /domain
     net user Administrator "{{ domain_admin_password }}" /domain
-  failed_when: false
 
   # DA logon simulation moved to dundermifflin_member role (runs on DM-SQL01 directly)
   # Start-Process -Credential creates a type 2 interactive logon that caches in LSASS
