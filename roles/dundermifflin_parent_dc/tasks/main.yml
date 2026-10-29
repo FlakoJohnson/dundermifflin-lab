@@ -128,20 +128,12 @@
 
   failed_when: false
 
-- name: Write password reset script
-  ansible.windows.win_copy:
-    content: |
-      Start-Transcript -Path C:\Windows\Temp\ludus-reset-pw.log -Force
-      Import-Module ActiveDirectory
-      Set-ADAccountPassword -Identity "domainadmin" -Reset -NewPassword (ConvertTo-SecureString '{{ domain_admin_password }}' -AsPlainText -Force)
-      Set-ADAccountPassword -Identity "domainuser" -Reset -NewPassword (ConvertTo-SecureString '{{ ad_domain_user_password }}' -AsPlainText -Force)
-      Set-ADAccountPassword -Identity "Administrator" -Reset -NewPassword (ConvertTo-SecureString '{{ domain_admin_password }}' -AsPlainText -Force)
-      Stop-Transcript
-    dest: C:\Windows\Temp\ludus-reset-pw.ps1
-
 - name: Reset Ludus default account passwords via SYSTEM scheduled task
   ansible.windows.win_shell: |
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\ludus-reset-pw.ps1"
+    $script = "net user domainadmin '{{ domain_admin_password }}' /domain; net user domainuser '{{ ad_domain_user_password }}' /domain; net user Administrator '{{ domain_admin_password }}' /domain"
+    $bytes = [System.Text.Encoding]::Unicode.GetBytes($script)
+    $encoded = [Convert]::ToBase64String($bytes)
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -EncodedCommand $encoded"
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     Register-ScheduledTask -TaskName "LudusResetPW" -Action $action -Principal $principal -Force | Out-Null
     Start-ScheduledTask -TaskName "LudusResetPW"
@@ -149,7 +141,6 @@
     do { Start-Sleep -Seconds 2; $elapsed += 2; $state = (Get-ScheduledTask -TaskName "LudusResetPW").State } while ($state -eq 'Running' -and $elapsed -lt $timeout)
     Unregister-ScheduledTask -TaskName "LudusResetPW" -Confirm:$false
     Write-Output "PW_RESET_DONE"
-    if (Test-Path "C:\Windows\Temp\ludus-reset-pw.log") { Get-Content "C:\Windows\Temp\ludus-reset-pw.log" }
   register: pw_reset
   changed_when: "'PW_RESET_DONE' in pw_reset.stdout"
   failed_when: false
