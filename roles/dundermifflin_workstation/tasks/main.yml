@@ -40,12 +40,6 @@
     delay: 30
   when: domain_join is changed
 
-- name: Reset local Administrator password
-  ansible.windows.win_user:
-    name: Administrator
-    password: "{{ domain_admin_password }}"
-    update_password: always
-
 - name: Add mscott to local Administrators
   ansible.windows.win_group_membership:
     name: Administrators

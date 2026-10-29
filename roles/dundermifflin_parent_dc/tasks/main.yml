@@ -1,14 +1,6 @@
 ---
 # dundermifflin_parent_dc — runs on DM-DC01 AFTER Ludus promotes it as forest root DC
 
-- name: Ensure localuser is in Domain Admins (required for Ansible role operations)
-  ansible.windows.win_group_membership:
-    name: Domain Admins
-    members:
-      - localuser
-    state: present
-  failed_when: false
-
 - name: Wait for AD DS to be fully operational
   ansible.windows.win_shell: |
     $timeout = 300
@@ -134,13 +126,6 @@
       New-GPLink -Guid $gpo.Id -Target "{{ parent_domain_dn }}" -LinkEnabled Yes | Out-Null
     }
 
-  failed_when: false
-
-- name: Reset Ludus default account passwords to match config
-  ansible.windows.win_shell: |
-    net user domainadmin "{{ domain_admin_password }}" /domain
-    net user domainuser "{{ ad_domain_user_password }}" /domain
-    net user Administrator "{{ domain_admin_password }}" /domain
   failed_when: false
 
   # DA logon simulation moved to dundermifflin_member role (runs on DM-SQL01 directly)

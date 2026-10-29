@@ -180,10 +180,9 @@ Template names are realistic (WorkstationAuth, SubordinateCA, EnrollmentAgent, e
 
 | Account | Password | Scope |
 |---------|----------|-------|
-| localuser | password | All VMs (Ludus provisioning — do not change) |
-| domainadmin | DM-Adm1n2026! | dundermifflin.local DA |
-| domainuser | DM-User2026! | dundermifflin.local standard user |
-| Administrator | DM-Adm1n2026! | Domain + local admin (reset post-deploy) |
+| localuser | password | All VMs (Ludus default) |
+| domainadmin | password | dundermifflin.local (Ludus default) |
+| Administrator | password | dundermifflin.local (Ludus default) |
 | kali | kali | Kali VM |
 
 ## Kali Tools
