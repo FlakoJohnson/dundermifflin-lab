@@ -128,16 +128,25 @@
 
   failed_when: false
 
-- name: Reset Ludus default account passwords to match config
+- name: Reset domainadmin password (from old default)
   ansible.windows.win_shell: |
     net user domainadmin "{{ domain_admin_password }}" /domain
+  vars:
+    ansible_become: true
+    ansible_become_method: runas
+    ansible_become_user: "{{ parent_domain }}\\domainadmin"
+    ansible_become_password: "password"
+  failed_when: false
+
+- name: Reset domainuser and Administrator passwords
+  ansible.windows.win_shell: |
     net user domainuser "{{ ad_domain_user_password }}" /domain
     net user Administrator "{{ domain_admin_password }}" /domain
   vars:
     ansible_become: true
     ansible_become_method: runas
     ansible_become_user: "{{ parent_domain }}\\domainadmin"
-    ansible_become_password: "password"
+    ansible_become_password: "{{ domain_admin_password }}"
   failed_when: false
 
   # DA logon simulation moved to dundermifflin_member role (runs on DM-SQL01 directly)
