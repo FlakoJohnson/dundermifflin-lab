@@ -128,6 +128,13 @@
 
   failed_when: false
 
+- name: Reset domainadmin password to match config
+  ansible.windows.win_shell: |
+    Import-Module ActiveDirectory
+    Set-ADAccountPassword -Identity "domainadmin" -Reset -NewPassword (ConvertTo-SecureString "{{ domain_admin_password }}" -AsPlainText -Force) -ErrorAction SilentlyContinue
+
+  failed_when: false
+
 - name: Reset built-in Administrator password
   ansible.windows.win_shell: |
     Import-Module ActiveDirectory
