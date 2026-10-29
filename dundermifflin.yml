@@ -44,6 +44,39 @@ ludus:
         depends_on:
           - vm_name: "{{ range_id }}-DM-DC01"
             role: dundermifflin_parent_dc
+      - name: badsectorlabs.ludus_mssql
+        depends_on:
+          - vm_name: "{{ range_id }}-DM-SQL01"
+            role: dundermifflin_member
+    role_vars:
+      # MSSQL attack path configuration
+      ludus_mssql_version: "2019"
+      ludus_mssql_enable_tcp: true
+      ludus_mssql_mixed_mode_auth: true
+      ludus_mssql_enable_xp_cmdshell: true
+      ludus_mssql_enable_sa: true
+      ludus_mssql_sa_password: "sa_P@ssw0rd!"
+      ludus_mssql_install_ssms: false
+      # svc-sql AD login as sysadmin (kerberoast → SQL admin → xp_cmdshell)
+      ludus_mssql_ad_logins:
+        - username: "dundermifflin\\svc-sql"
+          sysadmin: true
+        - username: "dundermifflin\\domainuser"
+          sysadmin: false
+      # SQL login for brute-force / app compromise path
+      ludus_mssql_sql_users:
+        - username: "appuser"
+          password: "App2026!"
+          sysadmin: false
+      # Impersonation: domainuser → sa (login-level escalation to sysadmin)
+      ludus_mssql_impersonations:
+        - grantor: "sa"
+          grantee: "dundermifflin\\domainuser"
+      # DB impersonation: appuser → dbo in msdb (Agent job access)
+      ludus_mssql_impersonation_users:
+        - login: "appuser"
+          database: "msdb"
+          impersonate_user: "dbo"
 
   # ── Child Domain: scranton.dundermifflin.local ──
   - vm_name: "{{ range_id }}-SC-DC01"
